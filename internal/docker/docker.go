@@ -5,18 +5,32 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/client"
 )
 
 // API is the subset of the Docker Engine API used by DockerScope.
 // It grows stage by stage (see docs/PLAN.md); keep it minimal.
 type API interface {
+	// Ping checks the daemon and (re)negotiates the API version.
 	Ping(ctx context.Context) (PingInfo, error)
+	// ListContainers lists all containers, including stopped ones.
 	ListContainers(ctx context.Context) ([]container.Summary, error)
+	// InspectContainer returns ErrNotFound (wrapped) if the container does not exist.
+	InspectContainer(ctx context.Context, id string) (container.InspectResponse, error)
+	// Events streams container events from since (zero: only new events) until
+	// ctx is cancelled. The error channel receives one value when the stream ends.
+	Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error)
 }
+
+// ErrNotFound reports a container that does not exist (anymore).
+var ErrNotFound = errors.New("contenedor inexistente")
 
 // PingInfo is the result of a successful ping.
 type PingInfo struct {
@@ -46,8 +60,11 @@ func New(host string) (*Client, error) {
 // Close releases the underlying transport.
 func (c *Client) Close() error { return c.cli.Close() }
 
+// Ping forces API version renegotiation on every call: the daemon may have been
+// upgraded while disconnected, and a failed first ping leaves the SDK on the
+// minimum version.
 func (c *Client) Ping(ctx context.Context) (PingInfo, error) {
-	res, err := c.cli.Ping(ctx, client.PingOptions{NegotiateAPIVersion: true})
+	res, err := c.cli.Ping(ctx, client.PingOptions{NegotiateAPIVersion: true, ForceNegotiate: true})
 	if err != nil {
 		return PingInfo{}, err
 	}
@@ -60,4 +77,32 @@ func (c *Client) ListContainers(ctx context.Context) ([]container.Summary, error
 		return nil, err
 	}
 	return res.Items, nil
+}
+
+func (c *Client) InspectContainer(ctx context.Context, id string) (container.InspectResponse, error) {
+	res, err := c.cli.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if cerrdefs.IsNotFound(err) {
+		return container.InspectResponse{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	if err != nil {
+		return container.InspectResponse{}, err
+	}
+	return res.Container, nil
+}
+
+func (c *Client) Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error) {
+	opts := client.EventsListOptions{
+		Filters: client.Filters{}.Add("type", string(events.ContainerEventType)),
+	}
+	if !since.IsZero() {
+		opts.Since = FormatEventTime(since)
+	}
+	res := c.cli.Events(ctx, opts)
+	return res.Messages, res.Err
+}
+
+// FormatEventTime formats t as the "seconds.nanoseconds" form accepted by the
+// events API "since"/"until" parameters.
+func FormatEventTime(t time.Time) string {
+	return fmt.Sprintf("%d.%09d", t.Unix(), t.Nanosecond())
 }

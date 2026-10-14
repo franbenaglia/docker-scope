@@ -4,12 +4,12 @@
 
 ## Estado actual
 - **Etapa:** 2 — Cliente Docker, inventario y eventos
-- **Último paso completado:** Etapa 1 cerrada. Binario único con el panel embebido; `/api/summary`
-  verificado contra Docker real (API 1.52), con Docker inaccesible (`containers: null`) y en modo demo.
-  Rechaza listen no loopback.
-- **Próximo paso:** Ampliar `docker.API` (inspect, stats, events, logs) y crear un fake reutilizable
-  en `internal/docker/dockertest`; después, el paquete `internal/inventory`. Revisar antes los
-  "Pendientes" de la etapa 2 que están más abajo.
+- **Último paso completado:** `docker.API` ampliada (Inspect, Events), fake `internal/docker/dockertest`
+  y paquete `internal/inventory` (reconciliación, eventos, reconexión con backoff, dedup, reinicios
+  observados) con tests en verde (-race, 30 repeticiones). `demo.Source` todavía NO implementa la
+  interfaz nueva: `go build ./...` falla en `internal/demo` hasta el próximo paso.
+- **Próximo paso:** Adaptar `demo.Source`, conectar el inventario en main, hacer que `/api/summary`
+  lea del inventario, agregar `GET /api/containers` y marcar en el panel los datos desactualizados.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
