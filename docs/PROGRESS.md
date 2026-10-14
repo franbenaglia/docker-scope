@@ -4,14 +4,15 @@
 
 ## Estado actual
 - **Etapa:** 9 — Panel: logs, incidentes, reglas, mantenimiento
-- **Último paso completado:** Etapa 8 cerrada. Panel en componentes (`web/src/components`), router por
-  hash (`#/`, `#/c/<id>`), tabla con búsqueda, filtros (estado, salud, proyecto), orden y agrupación por
-  Compose (preferencias en localStorage), detalle con metadatos, valores actuales y 4 gráficos (Chart.js
-  4.5.1, eje X fijado al rango pedido, huecos sin datos) con rangos de 15m a 7d.
-- **Próximo paso:** Etapa 9: visor de logs en el detalle (EventSource a `/logs/stream`: pausa, limpiar,
-  búsqueda en el buffer, autoscroll, stdout/stderr, buffer acotado en el cliente, cambio de contenedor =
-  cerrar el stream), vistas `#/incidents` (historial, ack), `#/rules` (CRUD) y `#/maintenance`, y
-  notificaciones del navegador opt-in (sólo los incidentes no suprimidos).
+- **Último paso completado:** Visor de logs en el detalle (`LogViewer.svelte`: EventSource a
+  `/logs/stream`, buffer de 5000 líneas / 4 MiB, pausa con cola, limpiar, búsqueda con resaltado solo
+  con nodos de texto, filtro stdout/stderr, autoscroll que se desactiva al subir, reconexión que descarta
+  lo ya visto por timestamp, mensaje útil si no se puede abrir). Base de la etapa 9: cliente de la API
+  con escritura JSON y tipos de alertas, rutas `#/incidents`, `#/rules`, `#/maintenance` (todavía sin
+  vistas), `live.incidentsVersion` y `notifier` (notificaciones opt-in).
+- **Próximo paso:** Vistas de incidentes (pendientes + historial paginado + ack), reglas (lista +
+  formulario de crear/editar/borrar con errores del servidor), mantenimiento (activo + formulario) y la
+  navegación del encabezado con el interruptor de notificaciones. Después, verificar en el navegador y cerrar.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)

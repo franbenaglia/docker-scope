@@ -3,6 +3,7 @@
   import { since } from '../lib/clock.svelte';
   import { fmtBytes, fmtCores, fmtDateTime, fmtDuration, fmtPercent, fmtRate } from '../lib/format';
   import { live } from '../lib/live.svelte';
+  import LogViewer from './LogViewer.svelte';
   import MetricChart from './MetricChart.svelte';
 
   interface Props {
@@ -288,6 +289,8 @@
       </div>
     {/if}
   </section>
+
+  <LogViewer {id} />
 {/if}
 
 <style>

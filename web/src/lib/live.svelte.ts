@@ -5,7 +5,8 @@
 // curso se guardan y se aplican después, en orden: cada evento trae el estado
 // completo del objeto, así que el resultado final es siempre el más reciente.
 
-import { api, type Container, type Daemon, type Metrics, type Summary } from './api';
+import { api, type Container, type Daemon, type Incident, type Metrics, type Summary } from './api';
+import { notifier } from './notify.svelte';
 
 export type StreamStatus = 'connecting' | 'live' | 'reconnecting';
 
@@ -28,6 +29,8 @@ class Live {
   error = $state<string | null>(null);
   /** Momento (ms) del último dato recibido del agente. */
   lastSeen = $state(0);
+  /** Aumenta con cada cambio de incidentes (o snapshot): las vistas lo usan para recargar. */
+  incidentsVersion = $state(0);
 
   sorted = $derived(Object.values(this.containers).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)));
 
@@ -118,6 +121,7 @@ class Live {
       this.summary = s;
       this.containers = next;
       this.error = null;
+      this.incidentsVersion++;
     } catch (e) {
       if (ctl.signal.aborted) return;
       this.error = e instanceof Error ? e.message : String(e);
@@ -146,6 +150,12 @@ class Live {
       case 'container_removed':
         delete this.containers[(data as { id: string }).id];
         break;
+      case 'incident': {
+        const ev = data as { type: 'opened' | 'resolved' | 'acked'; incident: Incident };
+        this.incidentsVersion++;
+        if (ev.type === 'opened') notifier.incidentOpened(ev.incident);
+        break;
+      }
       case 'metrics': {
         const items = (data as { items: Record<string, Metrics> }).items;
         // Ausente en la ronda = sin muestra actual (detenido o falló), no "igual que antes".

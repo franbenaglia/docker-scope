@@ -177,22 +177,128 @@ export class ApiError extends Error {
   }
 }
 
-async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { signal, headers: { Accept: 'application/json' } });
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, {
+    method,
+    signal,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (!res.ok) {
     let code = 'http_error';
     let message = `HTTP ${res.status}`;
     try {
-      const body = (await res.json()) as ApiErrorBody;
-      code = body.error.code;
-      message = body.error.message;
+      const err = (await res.json()) as ApiErrorBody;
+      code = err.error.code;
+      message = err.error.message;
     } catch {
       // cuerpo no JSON: conservar el mensaje genérico
     }
     throw new ApiError(res.status, code, message);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+const getJSON = <T>(path: string, signal?: AbortSignal) => request<T>('GET', path, undefined, signal);
+
+// --- Alertas ---
+
+export type RuleKind = 'not_running' | 'unhealthy' | 'restarts' | 'cpu' | 'memory';
+
+export interface RuleInput {
+  name: string;
+  kind: RuleKind;
+  enabled: boolean;
+  /** Vacío = cualquiera. container es un nombre (sigue al contenedor si se recrea). */
+  scope: { container: string; project: string; service: string };
+  /** cpu: % de un núcleo; memory: % del límite; restarts: cantidad. */
+  threshold: number;
+  for_seconds: number;
+  window_seconds: number;
+  cooldown_seconds: number;
+  recover_seconds: number;
+  hysteresis: number;
+}
+
+export interface Rule extends RuleInput {
+  id: number;
+  threshold_unit: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Incident {
+  id: number;
+  rule_id: number;
+  rule_name: string;
+  kind: RuleKind;
+  container_id: string;
+  container_name: string;
+  state: 'open' | 'resolved';
+  started_at: string;
+  opened_at: string;
+  resolved_at: string | null;
+  /** Reconocer no resuelve. */
+  acked_at: string | null;
+  /** Abierto durante un mantenimiento: sin aviso. */
+  suppressed: boolean;
+  summary: string;
+  /** Causa probable, nunca afirmada como cierta. */
+  cause: string;
+  resolution: string;
+  peak: number | null;
+}
+
+export interface IncidentPage {
+  items: Incident[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface Pending {
+  rule_id: number;
+  rule_name: string;
+  kind: RuleKind;
+  container_id: string;
+  container_name: string;
+  since: string;
+  opens_at: string;
+  in_cooldown: boolean;
+  value: number | null;
+}
+
+export interface MaintenanceInput {
+  /** "" = global. */
+  container: string;
+  duration_seconds?: number;
+  until?: string;
+  reason: string;
+}
+
+// --- Logs ---
+
+export interface LogLine {
+  time: string | null;
+  /** stdout | stderr | tty (TTY: no se distinguen) | system (mensaje del daemon). */
+  stream: 'stdout' | 'stderr' | 'tty' | 'system';
+  /** Texto saneado: mostrar siempre como texto, nunca como HTML. */
+  text: string;
+  truncated?: boolean;
+}
+
+export interface LogsResponse {
+  container_id: string;
+  tty: boolean;
+  log_driver: string;
+  lines: LogLine[];
+  limited: boolean;
+}
+
+const enc = encodeURIComponent;
 
 export const api = {
   summary: (signal?: AbortSignal) => getJSON<Summary>('/api/summary', signal),
@@ -204,4 +310,23 @@ export const api = {
       `/api/containers/${encodeURIComponent(id)}/series?range=${encodeURIComponent(range)}&points=${points}`,
       signal,
     ),
+  logs: (id: string, tail: number, signal?: AbortSignal) =>
+    getJSON<LogsResponse>(`/api/containers/${enc(id)}/logs?tail=${tail}`, signal),
+
+  rules: (signal?: AbortSignal) => getJSON<{ items: Rule[] }>('/api/rules', signal),
+  createRule: (r: RuleInput) => request<Rule>('POST', '/api/rules', r),
+  updateRule: (id: number, r: RuleInput) => request<Rule>('PUT', `/api/rules/${id}`, r),
+  deleteRule: (id: number) => request<void>('DELETE', `/api/rules/${id}`),
+
+  incidents: (q: { state?: string; container?: string; limit?: number; offset?: number }, signal?: AbortSignal) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v));
+    return getJSON<IncidentPage>(`/api/incidents?${p}`, signal);
+  },
+  pending: (signal?: AbortSignal) => getJSON<{ items: Pending[] }>('/api/incidents/pending', signal),
+  ack: (id: number) => request<Incident>('POST', `/api/incidents/${id}/ack`),
+
+  maintenance: (signal?: AbortSignal) => getJSON<{ items: Maintenance[] }>('/api/maintenance', signal),
+  addMaintenance: (m: MaintenanceInput) => request<Maintenance>('POST', '/api/maintenance', m),
+  endMaintenance: (id: number) => request<void>('DELETE', `/api/maintenance/${id}`),
 };

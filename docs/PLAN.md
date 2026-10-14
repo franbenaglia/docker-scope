@@ -122,7 +122,7 @@ _Cerrada: verificado contra Docker real (json-file con stdout/stderr y ANSI/OSC,
 _Cerrada: verificado en modo demo (escritorio y 390 px de ancho, sin scroll horizontal de página)._
 
 ## Etapa 9 — Panel: logs, incidentes, reglas, mantenimiento
-- [ ] Visor de logs: pausar, limpiar, buscar, autoscroll, stdout/stderr
+- [x] Visor de logs: pausar, limpiar, buscar, autoscroll, stdout/stderr
 - [ ] Historial de incidentes con ack
 - [ ] Editor de reglas
 - [ ] Modo mantenimiento global/por contenedor
