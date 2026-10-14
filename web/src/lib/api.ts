@@ -179,12 +179,14 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // El agente exige JSON en toda modificación (ADR-012), también sin datos: se envía "{}".
+  const mutation = method !== 'GET' && method !== 'HEAD';
+  if (mutation) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, {
     method,
     signal,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: mutation ? JSON.stringify(body ?? {}) : undefined,
   });
   if (!res.ok) {
     let code = 'http_error';

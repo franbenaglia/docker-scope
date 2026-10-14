@@ -224,3 +224,22 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
   memoria agrega una línea punteada de límite sólo si hay límite explícito. Las series se recargan
   periódicamente (de 10 s a 5 min según el rango).
 - Bundle ~245 KB (86 KB gzip), servido embebido; sin CDN.
+
+## ADR-016 — Interfaz de alertas, logs y notificaciones
+**Estado:** Aceptada (2026-10-14)
+**Decisión:**
+- Las mutaciones del panel envían siempre `Content-Type: application/json` y un cuerpo JSON (`{}` si
+  no hay datos). El servidor mantiene la exigencia de JSON en toda mutación (ADR-012). Lo destapó un 415
+  en el ack: los tests de la API ponían la cabecera siempre.
+- Vistas: `#/incidents` (pendientes con sondeo cada 3 s, porque son estado en memoria sin eventos;
+  historial paginado de hasta 200 recargado con `live.incidentsVersion`, que avanza con cada evento
+  `incident` y cada snapshot), `#/rules` (formulario según el tipo, errores de validación del servidor
+  tal cual, aviso de que editar resuelve los abiertos) y `#/maintenance`.
+- Notificaciones del navegador: desactivadas por defecto; se activan con un botón (pide permiso) y la
+  preferencia se guarda en localStorage. Sólo para incidentes `opened` no suprimidos; `tag` por incidente
+  para no duplicar. No hay notificaciones de eventos perdidos durante una desconexión (SSE no es durable).
+- Visor de logs: un EventSource por contenedor visible (se cierra al salir o al cambiar el tail), buffer de
+  5000 líneas / 4 MiB que descarta las viejas con aviso, render de hasta 2000 líneas coincidentes, pausa
+  con cola acotada, búsqueda con resaltado por segmentos de texto (nunca `{@html}`), autoscroll que se
+  desactiva al subir. Tras un `end` se cierra el EventSource para que no reconecte solo y repita el tail.
+  Si se reconecta por error de red, se descartan las líneas con timestamp ≤ al último visto.

@@ -53,6 +53,7 @@ func TestMutationOriginChecks(t *testing.T) {
 		{"null", "", "application/json", http.StatusForbidden},
 		{"", "cross-site", "application/json", http.StatusForbidden},
 		{"http://127.0.0.1:8080", "same-origin", "text/plain", http.StatusUnsupportedMediaType},
+		{"http://127.0.0.1:8080", "same-origin", "", http.StatusUnsupportedMediaType}, // the panel always sends JSON, even "{}"
 		{"http://127.0.0.1:8080", "same-origin", "application/x-www-form-urlencoded", http.StatusUnsupportedMediaType},
 	}
 	for _, c := range cases {
@@ -64,7 +65,9 @@ func TestMutationOriginChecks(t *testing.T) {
 		if c.site != "" {
 			req.Header.Set("Sec-Fetch-Site", c.site)
 		}
-		req.Header.Set("Content-Type", c.ctype)
+		if c.ctype != "" {
+			req.Header.Set("Content-Type", c.ctype)
+		}
 		rec := httptest.NewRecorder()
 		secHandler().ServeHTTP(rec, req)
 		if rec.Code != c.want {

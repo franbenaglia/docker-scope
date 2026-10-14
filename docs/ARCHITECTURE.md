@@ -18,8 +18,11 @@ internal/api/           handlers REST, DTOs, validación, middleware de segurida
 internal/sse/           hub SSE con colas acotadas
 internal/demo/          fuente de datos simulada
 web/                    Svelte + TS + Vite (build → web/dist, embebido)
-  src/lib/              api.ts (tipos y cliente), live.svelte.ts (SSE), router.svelte.ts, clock.svelte.ts, format.ts
-  src/components/       StatusBanners, SummaryCards, ContainerTable, ContainerDetail, MetricChart
+  src/lib/              api.ts (tipos y cliente), live.svelte.ts (SSE), router.svelte.ts, clock.svelte.ts,
+                        notify.svelte.ts (notificaciones opt-in), format.ts
+  src/components/       StatusBanners, SummaryCards, ContainerTable, ContainerDetail, MetricChart,
+                        LogViewer, IncidentsView, RulesView, MaintenanceView
+  Rutas (hash):         #/  #/c/<id>  #/incidents  #/rules  #/maintenance
 deploy/                 systemd, compose de prueba, config de ejemplo
 ```
 

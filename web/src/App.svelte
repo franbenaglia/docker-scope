@@ -2,6 +2,9 @@
   import { onMount } from 'svelte';
   import ContainerDetail from './components/ContainerDetail.svelte';
   import ContainerTable from './components/ContainerTable.svelte';
+  import IncidentsView from './components/IncidentsView.svelte';
+  import MaintenanceView from './components/MaintenanceView.svelte';
+  import RulesView from './components/RulesView.svelte';
   import StatusBanners from './components/StatusBanners.svelte';
   import SummaryCards from './components/SummaryCards.svelte';
   import { clock } from './lib/clock.svelte';
@@ -40,6 +43,19 @@
       {/if}
     </span>
   {/if}
+  <nav class="nav" aria-label="Secciones">
+    <a href="#/" aria-current={router.route.name === 'overview' || router.route.name === 'container' ? 'page' : undefined}>Contenedores</a>
+    <a href="#/incidents" aria-current={router.route.name === 'incidents' ? 'page' : undefined}>
+      Incidentes
+      {#if summary?.alerts && summary.alerts.open > 0}
+        <span class="count" title="{summary.alerts.open} abiertos, {summary.alerts.unacked} sin reconocer">{summary.alerts.open}</span>
+      {/if}
+    </a>
+    <a href="#/rules" aria-current={router.route.name === 'rules' ? 'page' : undefined}>Reglas</a>
+    <a href="#/maintenance" aria-current={router.route.name === 'maintenance' ? 'page' : undefined}>
+      Mantenimiento{#if summary?.alerts && summary.alerts.maintenance.length > 0}<span class="count info">{summary.alerts.maintenance.length}</span>{/if}
+    </a>
+  </nav>
   <span class="live muted small" title="Conexión en vivo con el agente">
     <span class="dot" class:on={live.stream === 'live'}></span>
     {live.stream === 'live' ? 'en vivo' : live.stream === 'connecting' ? 'conectando' : 'reconectando'}
@@ -75,6 +91,12 @@
       {#key router.route.id}
         <ContainerDetail id={router.route.id} />
       {/key}
+    {:else if router.route.name === 'incidents'}
+      <IncidentsView />
+    {:else if router.route.name === 'rules'}
+      <RulesView />
+    {:else if router.route.name === 'maintenance'}
+      <MaintenanceView />
     {:else}
       <p>Página inexistente. <a href="#/">Volver al resumen</a></p>
     {/if}
@@ -96,6 +118,36 @@
     font-weight: 700;
     color: var(--text);
     text-decoration: none;
+  }
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  .nav a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+  }
+  .nav a:hover {
+    color: var(--text);
+  }
+  .nav a[aria-current='page'] {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .count {
+    margin-left: 0.3rem;
+    font-size: 0.75rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: var(--bad);
+    color: #fff;
+  }
+  .count.info {
+    background: var(--info);
+    color: var(--bg);
   }
   .live {
     margin-left: auto;

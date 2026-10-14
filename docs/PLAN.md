@@ -123,10 +123,12 @@ _Cerrada: verificado en modo demo (escritorio y 390 px de ancho, sin scroll hori
 
 ## Etapa 9 — Panel: logs, incidentes, reglas, mantenimiento
 - [x] Visor de logs: pausar, limpiar, buscar, autoscroll, stdout/stderr
-- [ ] Historial de incidentes con ack
-- [ ] Editor de reglas
-- [ ] Modo mantenimiento global/por contenedor
-- [ ] Notificaciones del navegador opt-in
+- [x] Historial de incidentes con ack
+- [x] Editor de reglas
+- [x] Modo mantenimiento global/por contenedor
+- [x] Notificaciones del navegador opt-in
+
+_Cerrada: verificado en el navegador (demo y Docker real): ack, regla inválida/válida, mantenimiento iniciar/finalizar, visor de logs (seguir, buscar, pausar), render seguro de HTML/OSC. Las notificaciones del navegador no se probaron de forma interactiva (requieren conceder el permiso)._
 
 ## Etapa 10 — Modo demo y endurecimiento
 - [ ] `--demo` con fake Docker y datos simulados, base de datos separada, banner visible

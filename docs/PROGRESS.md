@@ -3,16 +3,14 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 9 — Panel: logs, incidentes, reglas, mantenimiento
-- **Último paso completado:** Visor de logs en el detalle (`LogViewer.svelte`: EventSource a
-  `/logs/stream`, buffer de 5000 líneas / 4 MiB, pausa con cola, limpiar, búsqueda con resaltado solo
-  con nodos de texto, filtro stdout/stderr, autoscroll que se desactiva al subir, reconexión que descarta
-  lo ya visto por timestamp, mensaje útil si no se puede abrir). Base de la etapa 9: cliente de la API
-  con escritura JSON y tipos de alertas, rutas `#/incidents`, `#/rules`, `#/maintenance` (todavía sin
-  vistas), `live.incidentsVersion` y `notifier` (notificaciones opt-in).
-- **Próximo paso:** Vistas de incidentes (pendientes + historial paginado + ack), reglas (lista +
-  formulario de crear/editar/borrar con errores del servidor), mantenimiento (activo + formulario) y la
-  navegación del encabezado con el interruptor de notificaciones. Después, verificar en el navegador y cerrar.
+- **Etapa:** 10 — Modo demo y endurecimiento
+- **Último paso completado:** Etapa 9 cerrada. Vistas `#/incidents` (pendientes, historial, ack,
+  notificaciones opt-in), `#/rules` (CRUD con validación del servidor), `#/maintenance` y navegación
+  con contadores. Visor de logs en el detalle. Bug corregido: las mutaciones sin cuerpo (ack, DELETE)
+  salían sin Content-Type y el middleware las rechazaba con 415; ahora el cliente envía siempre `{}` JSON.
+- **Próximo paso:** Etapa 10: escenario dinámico del demo (fallos, reinicios, cambios de salud para ver
+  incidentes y recuperaciones) y revisión de seguridad: solo 127.0.0.1 (ADR-004), no registrar secretos
+  (revisar los logs del agente: errores de Docker, labels), permisos y límites. Leer la etapa 10 en PLAN.md.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -23,6 +21,7 @@
 _(lo que no pudo probarse y por qué)_
 - Etapa 1: `make dev` (agente + Vite en paralelo) no se probó de forma interactiva; `make check` y
   el binario sí.
+- Etapa 9: notificaciones del navegador no probadas de forma interactiva (el navegador headless no concede el permiso).
 - Etapa 5: `make dev` (Vite + -allow-origin) sigue sin probarse de forma interactiva.
 - Etapa 2: no se probó un `systemctl restart docker` real (requiere la autorización del usuario). Sí se
   probó la desconexión real cortando un proxy socat del socket, y el reinicio del daemon con el fake.
@@ -37,6 +36,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 9 | Visor de logs, vistas de incidentes/reglas/mantenimiento, navegación, notificaciones opt-in. Bug corregido: mutaciones sin cuerpo → 415 (el cliente ahora siempre envía JSON). Render seguro verificado con logs reales maliciosos. |
 | 2026-10-14 | 8 | Panel: componentes, router por hash, tabla (filtros, orden, agrupación Compose), detalle con gráficos Chart.js (eje X fijado al rango), reloj compartido, estilos globales. Verificado en demo, escritorio y móvil. |
 | 2026-10-14 | 7 | Logs: parser (frames/TTY/timestamps), sanitizado, buffer acotado, REST tail + SSE follow con límite de streams, demo. Bug corregido: el truncado contaba dos veces. Verificado contra Docker real. |
 | 2026-10-14 | 6 | Motor de alertas (tick 1s, pendiente en memoria, abierta/resuelta persistidas, histéresis, cooldown, recover_for, mantenimiento con supresión, causas probables por códigos y eventos), API y SSE. Verificado contra Docker real con contenedores dsp-*. Corregido: dur() y los contenedores eliminados entre ticks (tracks inactivos). |
