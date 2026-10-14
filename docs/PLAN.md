@@ -23,18 +23,21 @@ Referencia de alcance: [SPEC.md](SPEC.md). Decisiones: [DECISIONS.md](DECISIONS.
 conteos reales de Docker.
 
 ## Etapa 2 — Cliente Docker, inventario y eventos
-- [ ] Interfaz pequeña `DockerAPI` (list, inspect, stats, events, logs, ping) + implementación real
-- [ ] Fake configurable para tests
-- [ ] Inventario en memoria indexado por ID completo; campos de SPEC "Información de contenedores"
-- [ ] Etiquetas Compose (proyecto/servicio)
-- [ ] Suscripción a eventos (start, stop, die, destroy, restart, health_status)
-- [ ] Reconexión con backoff + reconciliación por re-listado + deduplicación de eventos
-- [ ] Estado de conexión del daemon (connected/disconnected/stale con timestamp)
-- [ ] Contador de reinicios observados separado de RestartCount
-- [ ] Tests con fake: reconexión, reconciliación, recreación con mismo nombre
+- [x] Interfaz pequeña `DockerAPI` (list, inspect, stats, events, logs, ping) + implementación real
+- [x] Fake configurable para tests
+- [x] Inventario en memoria indexado por ID completo; campos de SPEC "Información de contenedores"
+- [x] Etiquetas Compose (proyecto/servicio)
+- [x] Suscripción a eventos (start, stop, die, destroy, restart, health_status)
+- [x] Reconexión con backoff + reconciliación por re-listado + deduplicación de eventos
+- [x] Estado de conexión del daemon (connected/disconnected/stale con timestamp)
+- [x] Contador de reinicios observados separado de RestartCount
+- [x] Tests con fake: reconexión, reconciliación, recreación con mismo nombre
 
 **Terminado cuando:** con Docker reiniciado (`systemctl restart docker`, sólo si el usuario lo
 autoriza; si no, con el fake) el agente marca desconexión y reconcilia sin falsos "caídos".
+
+_Cerrada: verificado con el fake (tests) y contra Docker real cortando un proxy socat del socket;
+no se reinició el daemon del host._
 
 ## Etapa 3 — Colector de métricas
 - [ ] Muestreador único con intervalo configurable (5s), concurrencia limitada, timeouts

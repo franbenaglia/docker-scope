@@ -2,7 +2,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -11,22 +10,28 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 
-	"github.com/franbenaglia/docker-scope/internal/docker"
+	"github.com/franbenaglia/docker-scope/internal/inventory"
 )
+
+// Inventory is the read side of inventory.Inventory.
+type Inventory interface {
+	Snapshot() inventory.Snapshot
+}
 
 // Server holds the HTTP handlers' dependencies.
 type Server struct {
-	Docker docker.API
-	Mode   string // "docker" or "demo"
-	Web    fs.FS  // built frontend (index.html at the root)
-	Log    *slog.Logger
-	Now    func() time.Time
+	Inventory Inventory
+	Mode      string // "docker" or "demo"
+	Web       fs.FS  // built frontend (index.html at the root)
+	Log       *slog.Logger
+	Now       func() time.Time
 }
 
 // Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/summary", s.handleSummary)
+	mux.HandleFunc("GET /api/containers", s.handleContainers)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint inexistente")
 	})
@@ -34,19 +39,31 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// SummaryDTO is the response of GET /api/summary.
-type SummaryDTO struct {
-	Mode        string     `json:"mode"`
-	Daemon      DaemonDTO  `json:"daemon"`
-	Containers  *CountsDTO `json:"containers"` // null when Docker is unreachable: unknown, not zero
-	GeneratedAt time.Time  `json:"generated_at"`
-}
-
 // DaemonDTO describes the Docker daemon connection.
 type DaemonDTO struct {
-	Status     string `json:"status"` // "connected" | "disconnected"
-	APIVersion string `json:"api_version,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Status     string    `json:"status"` // "connecting" | "connected" | "disconnected"
+	APIVersion string    `json:"api_version,omitempty"`
+	Since      time.Time `json:"since"`
+	LastError  string    `json:"last_error,omitempty"`
+	Attempts   int       `json:"attempts,omitempty"` // consecutive failed reconnection attempts
+}
+
+// DataStateDTO qualifies how current container data is. Embedded in responses.
+type DataStateDTO struct {
+	// Synced is false until the first full listing: no data means unknown, not "none".
+	Synced bool `json:"synced"`
+	// Stale is true when Docker is unreachable and data is the last known state.
+	Stale bool      `json:"stale"`
+	AsOf  time.Time `json:"as_of"`
+}
+
+// SummaryDTO is the response of GET /api/summary.
+type SummaryDTO struct {
+	Mode   string    `json:"mode"`
+	Daemon DaemonDTO `json:"daemon"`
+	DataStateDTO
+	Containers  *CountsDTO `json:"containers"` // null until the first sync
+	GeneratedAt time.Time  `json:"generated_at"`
 }
 
 // CountsDTO counts containers by state.
@@ -59,31 +76,102 @@ type CountsDTO struct {
 	Unhealthy  int `json:"unhealthy"` // running containers only
 }
 
-// handleSummary queries Docker directly. Stage 2 replaces this with the shared
-// in-memory inventory so browser requests do not hit Docker.
-func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+// ContainerDTO is one container in GET /api/containers.
+type ContainerDTO struct {
+	ID      string `json:"id"`
+	ShortID string `json:"short_id"`
+	Name    string `json:"name"`
+	Image   string `json:"image"`
+	State   string `json:"state"`
+	// Health: "none" (no HEALTHCHECK), "starting", "healthy", "unhealthy".
+	Health string `json:"health"`
+	// HealthCurrent is false when the container is not running: Health is then
+	// the last status Docker kept.
+	HealthCurrent bool       `json:"health_current"`
+	CreatedAt     *time.Time `json:"created_at"`
+	StartedAt     *time.Time `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+	UptimeSeconds *int64     `json:"uptime_seconds"` // running only
+	ExitCode      *int       `json:"exit_code"`      // exited/dead only
+	OOMKilled     bool       `json:"oom_killed"`
 
-	out := SummaryDTO{Mode: s.Mode, GeneratedAt: s.Now().UTC()}
-	ping, err := s.Docker.Ping(ctx)
-	if err == nil {
-		var list []container.Summary
-		list, err = s.Docker.ListContainers(ctx)
-		if err == nil {
-			out.Daemon = DaemonDTO{Status: "connected", APIVersion: ping.APIVersion}
-			c := countContainers(list)
-			out.Containers = &c
-		}
+	RestartPolicy       string     `json:"restart_policy"`
+	RestartCount        int        `json:"restart_count"`     // reported by Docker
+	ObservedRestarts    int        `json:"observed_restarts"` // observed by the agent
+	LastObservedRestart *time.Time `json:"last_observed_restart"`
+
+	ComposeProject string `json:"compose_project,omitempty"`
+	ComposeService string `json:"compose_service,omitempty"`
+}
+
+// ContainerListDTO is the response of GET /api/containers.
+type ContainerListDTO struct {
+	DataStateDTO
+	Items []ContainerDTO `json:"items"`
+}
+
+func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
+	snap := s.Inventory.Snapshot()
+	out := SummaryDTO{
+		Mode:         s.Mode,
+		Daemon:       daemonDTO(snap.Conn),
+		DataStateDTO: dataState(snap),
+		GeneratedAt:  s.Now().UTC(),
 	}
-	if err != nil {
-		s.Log.Warn("docker no disponible", "err", err)
-		out.Daemon = DaemonDTO{Status: "disconnected", Error: "no se pudo contactar al daemon Docker"}
+	if snap.Synced {
+		c := countContainers(snap.Containers)
+		out.Containers = &c
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
-func countContainers(list []container.Summary) CountsDTO {
+func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
+	snap := s.Inventory.Snapshot()
+	now := s.Now()
+	out := ContainerListDTO{DataStateDTO: dataState(snap), Items: make([]ContainerDTO, 0, len(snap.Containers))}
+	for _, c := range snap.Containers {
+		out.Items = append(out.Items, containerDTO(c, now))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func daemonDTO(c inventory.ConnState) DaemonDTO {
+	return DaemonDTO{
+		Status: string(c.Status), APIVersion: c.APIVersion, Since: c.Since.UTC(),
+		LastError: c.LastError, Attempts: c.Attempts,
+	}
+}
+
+func dataState(s inventory.Snapshot) DataStateDTO {
+	return DataStateDTO{Synced: s.Synced, Stale: s.Stale, AsOf: s.AsOf.UTC()}
+}
+
+func containerDTO(c *inventory.Container, now time.Time) ContainerDTO {
+	d := ContainerDTO{
+		ID: c.ID, ShortID: c.ShortID(), Name: c.Name, Image: c.Image, State: string(c.State),
+		Health: c.Health, HealthCurrent: c.HealthCurrent() != "",
+		CreatedAt: timePtr(c.CreatedAt), StartedAt: timePtr(c.StartedAt), FinishedAt: timePtr(c.FinishedAt),
+		ExitCode: c.ExitCode, OOMKilled: c.OOMKilled,
+		RestartPolicy: c.RestartPolicy, RestartCount: c.RestartCount,
+		ObservedRestarts: c.ObservedRestarts, LastObservedRestart: timePtr(c.LastObservedRestart),
+		ComposeProject: c.ComposeProject, ComposeService: c.ComposeService,
+	}
+	if c.Running() && !c.StartedAt.IsZero() {
+		up := int64(c.Uptime(now) / time.Second)
+		d.UptimeSeconds = &up
+	}
+	return d
+}
+
+func timePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := t.UTC()
+	return &u
+}
+
+func countContainers(list []*inventory.Container) CountsDTO {
 	var c CountsDTO
 	for _, ct := range list {
 		c.Total++
@@ -97,9 +185,7 @@ func countContainers(list []container.Summary) CountsDTO {
 		default:
 			c.Stopped++
 		}
-		// Docker keeps the last health status after a container exits; it is only
-		// meaningful while the container runs.
-		if ct.State == container.StateRunning && ct.Health != nil && ct.Health.Status == container.Unhealthy {
+		if ct.HealthCurrent() == inventory.HealthUnhealthy {
 			c.Unhealthy++
 		}
 	}

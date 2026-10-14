@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/franbenaglia/docker-scope/internal/config"
 	"github.com/franbenaglia/docker-scope/internal/demo"
 	"github.com/franbenaglia/docker-scope/internal/docker"
+	"github.com/franbenaglia/docker-scope/internal/inventory"
 	"github.com/franbenaglia/docker-scope/web"
 )
 
@@ -42,7 +44,7 @@ func run() error {
 	mode := "docker"
 	if cfg.Demo {
 		mode = "demo"
-		src = demo.Source{}
+		src = demo.New(time.Now())
 		log.Warn("MODO DEMO: datos simulados, sin conexión a Docker")
 	} else {
 		cli, err := docker.New(cfg.DockerHost)
@@ -53,10 +55,15 @@ func run() error {
 		src = cli
 	}
 
+	inv := inventory.New(src, inventory.Options{Log: log.With("comp", "inventory")})
+	var wg sync.WaitGroup
+	wg.Go(func() { _ = inv.Run(ctx) })
+	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
+
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
-			Docker: src, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
+			Inventory: inv, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,

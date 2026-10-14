@@ -10,17 +10,59 @@ export interface Counts {
 }
 
 export interface Daemon {
-  status: 'connected' | 'disconnected';
+  status: 'connecting' | 'connected' | 'disconnected';
   api_version?: string;
-  error?: string;
+  since: string;
+  last_error?: string;
+  attempts?: number;
 }
 
-export interface Summary {
+/** Qué tan actuales son los datos de contenedores. */
+export interface DataState {
+  /** false hasta el primer listado completo: sin datos = desconocido, no "ninguno". */
+  synced: boolean;
+  /** true si Docker no responde: los datos son el último estado conocido. */
+  stale: boolean;
+  as_of: string;
+}
+
+export interface Summary extends DataState {
   mode: 'docker' | 'demo';
   daemon: Daemon;
-  /** null cuando Docker no responde: desconocido, no cero. */
+  /** null hasta la primera sincronización. */
   containers: Counts | null;
   generated_at: string;
+}
+
+export type Health = 'none' | 'starting' | 'healthy' | 'unhealthy';
+
+export interface Container {
+  id: string;
+  short_id: string;
+  name: string;
+  image: string;
+  state: string;
+  health: Health;
+  /** false si no está en ejecución: health es el último valor que guardó Docker. */
+  health_current: boolean;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  uptime_seconds: number | null;
+  exit_code: number | null;
+  oom_killed: boolean;
+  restart_policy: string;
+  /** Informado por Docker (reinicios por política). */
+  restart_count: number;
+  /** Observados por el agente (cualquier causa). */
+  observed_restarts: number;
+  last_observed_restart: string | null;
+  compose_project?: string;
+  compose_service?: string;
+}
+
+export interface ContainerList extends DataState {
+  items: Container[];
 }
 
 export interface ApiErrorBody {
@@ -56,4 +98,5 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 export const api = {
   summary: (signal?: AbortSignal) => getJSON<Summary>('/api/summary', signal),
+  containers: (signal?: AbortSignal) => getJSON<ContainerList>('/api/containers', signal),
 };

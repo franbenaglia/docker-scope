@@ -3,13 +3,13 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 2 — Cliente Docker, inventario y eventos
-- **Último paso completado:** `docker.API` ampliada (Inspect, Events), fake `internal/docker/dockertest`
-  y paquete `internal/inventory` (reconciliación, eventos, reconexión con backoff, dedup, reinicios
-  observados) con tests en verde (-race, 30 repeticiones). `demo.Source` todavía NO implementa la
-  interfaz nueva: `go build ./...` falla en `internal/demo` hasta el próximo paso.
-- **Próximo paso:** Adaptar `demo.Source`, conectar el inventario en main, hacer que `/api/summary`
-  lea del inventario, agregar `GET /api/containers` y marcar en el panel los datos desactualizados.
+- **Etapa:** 3 — Colector de métricas
+- **Último paso completado:** Etapa 2 cerrada. Inventario en memoria alimentado por eventos y
+  reconciliación; la API (`/api/summary`, `/api/containers`) lee del inventario; el panel muestra
+  los estados conectando/desconectado/datos desactualizados y una lista básica de contenedores.
+- **Próximo paso:** Agregar `ContainerStats` a `docker.API` (y al fake), crear
+  `internal/collector` con un ticker único y cálculos puros (CPU ADR-002, memoria ADR-003, red,
+  block I/O) bien testeados. Revisar `container.StatsResponse` con `go doc` antes de diseñar.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -20,21 +20,19 @@
 _(lo que no pudo probarse y por qué)_
 - Etapa 1: `make dev` (agente + Vite en paralelo) no se probó de forma interactiva; `make check` y
   el binario sí.
+- Etapa 2: no se probó un `systemctl restart docker` real (requiere la autorización del usuario). Sí se
+  probó la desconexión real cortando un proxy socat del socket, y el reinicio del daemon con el fake.
 
 ## Pendientes / ideas fuera de etapa
 _(no ampliar el alcance de SPEC.md; anotar aquí)_
-- **Etapa 2:** si el primer ping falla (Docker caído al arrancar), el SDK negocia la API mínima
-  (1.40) y no vuelve a negociar. En la reconexión, usar `PingOptions{NegotiateAPIVersion: true,
-  ForceNegotiate: true}`.
-- **Etapa 2:** Docker conserva `Health.Status` tras salir el contenedor (visto en el host: 8
-  exited con "unhealthy"). La salud sólo se considera con el contenedor en ejecución; en la UI
-  mostrar "última salud conocida" para detenidos, sin contarla como unhealthy.
-- **Etapa 2:** `/api/summary` consulta Docker en cada request (temporal); pasarlo al inventario
-  compartido.
+- Los reintentos de conexión registran un WARN por intento (con un máximo de 30 s es aceptable);
+  si molesta, bajar a Debug después del primero.
+- Etapa 10: el modo demo usa `dockertest.Fake` (ADR-009); agregar ahí el escenario dinámico.
 
 ## Bitácora
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 2 | Inventario (eventos, reconciliación, backoff, dedup, reinicios observados), fake Docker, API desde el inventario, panel con stale. Verificado contra Docker real (contenedores de prueba dsprobe*) y con desconexión vía proxy. |
 | 2026-10-14 | 1→2 | Módulo renombrado a github.com/franbenaglia/docker-scope (ADR-007), remoto origin configurado (sin push). |
 | 2026-10-14 | 1 | Esqueleto Go + Svelte, ADR-006 (versiones), /api/summary real, embed, Makefile, config de ejemplo. Bug detectado en el host real: salud "unhealthy" en contenedores exited. |

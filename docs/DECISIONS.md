@@ -66,3 +66,23 @@ externo.
 **Decisión:** El módulo es `github.com/franbenaglia/docker-scope` y el remoto `origin` es
 https://github.com/franbenaglia/docker-scope.git. El binario conserva el nombre `dockerscope`.
 **Consecuencias:** Push sólo cuando el usuario lo pida.
+
+## ADR-008 — Reinicios observados y salud de contenedores detenidos
+**Estado:** Aceptada (2026-10-14)
+**Contexto:** SPEC pide distinguir el `RestartCount` de Docker de los reinicios observados. Docker
+conserva el último `Health.Status` de los contenedores que ya salieron (en el host había 8 exited
+con "unhealthy").
+**Decisión:**
+- Un reinicio observado es un avance de `State.StartedAt` en un contenedor que ya había corrido,
+  sea cual sea la causa (política, manual, reinicio del daemon). Se detecta comparando StartedAt al
+  procesar eventos y al reconciliar, así que es idempotente frente a eventos repetidos. Si hubo
+  varios reinicios mientras Docker estaba desconectado, cuentan como uno.
+- La salud sólo es "actual" con el contenedor en `running`. Para los demás se expone como última
+  salud conocida (`health_current: false`) y no cuenta como unhealthy.
+- `HealthNone` ("none") = sin HEALTHCHECK; nunca equivale a healthy.
+
+## ADR-009 — Modo demo sobre el fake de Docker
+**Estado:** Aceptada (2026-10-14)
+**Decisión:** `demo.New` devuelve un `dockertest.Fake` poblado. El modo demo recorre exactamente
+el mismo camino (inventario, API, panel) que Docker real, sin código especial en esas capas. El agente
+usa una sola fuente: demo o Docker, nunca las dos.

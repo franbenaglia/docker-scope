@@ -1,13 +1,14 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapa 1 implementada (config, docker, demo, api, web). El resto de los paquetes son previstos.
+> Estado: etapas 1–2 implementadas (config, docker, dockertest, inventory, demo, api, web). El resto de los paquetes son previstos.
 
 ## Estructura de directorios (prevista)
 ```
 cmd/dockerscope/        main: flags, config, wiring, apagado ordenado
 internal/config/        carga y validación de configuración
-internal/docker/        interfaz DockerAPI, cliente real, fake para tests
+internal/docker/        interfaz docker.API + cliente real (moby SDK)
+internal/docker/dockertest/  daemon falso en memoria (tests y modo demo)
 internal/inventory/     estado de contenedores en memoria, eventos, reconciliación
 internal/collector/     muestreo de métricas, cálculo de deltas/tasas
 internal/store/         SQLite: migraciones, samples, incidents, rules, maintenance
@@ -31,8 +32,20 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
 ```
 
 ## Interfaces clave
-- `docker.API` ([internal/docker/docker.go](../internal/docker/docker.go)): `Ping`, `ListContainers`.
-  Se amplía en la etapa 2. Implementaciones: `docker.Client` (moby SDK) y `demo.Source`.
+- `docker.API` ([internal/docker/docker.go](../internal/docker/docker.go)): `Ping` (renegocia la versión
+  de la API en cada llamada), `ListContainers`, `InspectContainer` (devuelve `docker.ErrNotFound`),
+  `Events(since)`. Implementaciones: `docker.Client` y `dockertest.Fake`.
+- `inventory.Inventory` ([internal/inventory](../internal/inventory/inventory.go)):
+  - Una goroutine (`Run`) muta el estado; `Snapshot()` y `Get(id)` devuelven copias.
+  - Sesión: ping → suscripción a eventos (con `since` = último evento procesado) → reconciliación
+    (listado + inspect con concurrencia 8) → conectado → eventos y resync cada 60 s.
+  - Cualquier error termina la sesión → `disconnected` (se conservan los datos, `Stale`) → backoff
+    con jitter de 0,5 s a 30 s.
+  - Eventos: dedup por (id, acción, timeNano) sobre los últimos 4096; cada evento relevante → inspect
+    (idempotente). `destroy`/not found → Removed.
+  - Listeners `OnChange(Change)` / `OnConnection(ConnState)`: se ejecutan en la goroutine de Run y no deben bloquear.
+    `Change.Initial` = primera sincronización (estado preexistente, no transición); `Change.Event`
+    es nil si el cambio se detectó por reconciliación.
 - Config ([internal/config](../internal/config/config.go)): valores por defecto < JSON (`--config`) < flags.
   Ejemplo en [deploy/config.example.json](../deploy/config.example.json).
 - Frontend embebido: paquete `web` (`web.Dist()`), `//go:embed all:dist`. `web/dist/.gitkeep`
@@ -44,7 +57,8 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 
 | Método | Ruta | Respuesta | Notas |
 |---|---|---|---|
-| GET | `/api/summary` | `SummaryDTO` | `containers` es `null` si Docker no responde (desconocido ≠ 0). `unhealthy` cuenta sólo los que están en ejecución. `mode`: `docker`\|`demo`. |
+| GET | `/api/summary` | `SummaryDTO` | `daemon` {status connecting\|connected\|disconnected, since, last_error, attempts}; `synced`/`stale`/`as_of`; `containers` es `null` hasta la primera sincronización (desconocido ≠ 0). `unhealthy` cuenta sólo los que están en ejecución. |
+| GET | `/api/containers` | `ContainerListDTO` | `synced`/`stale`/`as_of` + `items[]` ordenados por nombre. Las fechas van en UTC o `null`; `health_current`, `restart_count` (Docker) vs. `observed_restarts` (agente). Sin filtros ni paginación todavía (etapa 5). |
 | * | `/api/*` desconocida | 404 `not_found` | |
 
 _(completar el resto en la etapa 5)_
