@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -29,6 +30,9 @@ type Server struct {
 	Retention store.Retention
 	Hub       *sse.Hub
 	Alerts    Alerts
+	Logs      LogSource
+
+	logStreams atomic.Int32 // open log follow streams
 	// HeartbeatSeconds is announced in the hello event (clients use it to
 	// detect a dead stream).
 	HeartbeatSeconds float64
@@ -46,6 +50,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/containers", s.handleContainers)
 	mux.HandleFunc("GET /api/containers/{id}", s.handleContainer)
 	mux.HandleFunc("GET /api/containers/{id}/series", s.handleSeries)
+	if s.Logs != nil {
+		mux.HandleFunc("GET /api/containers/{id}/logs", s.handleLogs)
+		mux.HandleFunc("GET /api/containers/{id}/logs/stream", s.handleLogsStream)
+	}
 	if s.Alerts != nil {
 		s.routeAlerts(mux)
 	}

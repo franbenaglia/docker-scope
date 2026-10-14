@@ -39,6 +39,7 @@ func New(now time.Time) docker.API {
 	st := newStats(now, dt.FakeHost)
 	st.memLimit[id(2)] = 512 << 20
 	f.StatsFunc = st.next
+	f.LogsFunc = logs(func(cid string) bool { return cid != id(4) && cid != id(5) }) // 4 and 5 are exited
 	return f
 }
 

@@ -100,13 +100,16 @@ _Cerrada: verificado con binario -race contra Docker real (alta y baja en vivo, 
 _Cerrada: 17 tests del motor + store + API; verificado contra Docker real (unhealthy, bucle de reinicios, kill de un contenedor vigilado, ack, mantenimiento con supresión, recuperación y eliminación, eventos SSE) con binario -race._
 
 ## Etapa 7 — Logs
-- [ ] Tail inicial 200 líneas, límite configurable acotado
-- [ ] Follow por SSE en stream separado; cancelación al cerrar/cambiar
-- [ ] Demux stdout/stderr (stdcopy) vs. TTY
-- [ ] Buffers acotados por líneas y bytes; tamaño máximo por línea
-- [ ] Mensaje claro si el logging driver no permite leer
-- [ ] Sanitizado de secuencias de terminal peligrosas
-- [ ] Tests de demux, truncado, cancelación
+- [x] Tail inicial 200 líneas, límite configurable acotado (0–5000; REST corta a 2 MiB)
+- [x] Follow por SSE en stream separado; cancelación al cerrar/cambiar (el cierre del cliente cancela la petición a Docker)
+- [x] Demux stdout/stderr (frames propios, stream 3 = mensajes del daemon) vs. TTY
+- [x] Buffers acotados por líneas y bytes (2000 líneas / 1 MiB por stream, descarte con aviso `dropped`); 8 KiB por línea
+- [x] Mensaje claro si el logging driver no permite leer (409 `logs_unavailable`)
+- [x] Sanitizado de secuencias de terminal peligrosas (CSI, OSC, controles C0/C1, bidi)
+- [x] Tests de demux, truncado, cancelación (+ fuzzing del parser)
+- [ ] → Etapa 9: visor en el panel
+
+_Cerrada: verificado contra Docker real (json-file con stdout/stderr y ANSI/OSC, TTY, driver none, follow y fin al detener) con binario -race._
 
 ## Etapa 8 — Panel: resumen, tabla, detalle
 - [ ] Tema oscuro, layout responsive

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -35,7 +36,21 @@ type API interface {
 	// one (PreCPUStats is empty): the collector computes deltas between its own
 	// samples. Returns ErrNotFound (wrapped) if the container does not exist.
 	ContainerStats(ctx context.Context, id string) (container.StatsResponse, error)
+	// ContainerLogs returns the raw log stream (multiplexed unless the
+	// container has a TTY) with Docker timestamps. The caller must close it;
+	// cancelling ctx also closes it. Returns ErrNotFound or ErrLogsUnsupported
+	// (both wrapped) when applicable.
+	ContainerLogs(ctx context.Context, id string, opts LogsOptions) (io.ReadCloser, error)
 }
+
+// LogsOptions selects log lines.
+type LogsOptions struct {
+	Tail   int  // last N lines (0 = none, only new lines when following)
+	Follow bool // keep the stream open for new lines
+}
+
+// ErrLogsUnsupported reports a logging driver that does not allow reading.
+var ErrLogsUnsupported = errors.New("el logging driver no permite leer logs")
 
 // ErrNotFound reports a container that does not exist (anymore).
 var ErrNotFound = errors.New("contenedor inexistente")
@@ -145,6 +160,22 @@ func (c *Client) ContainerStats(ctx context.Context, id string) (container.Stats
 		return container.StatsResponse{}, fmt.Errorf("decodificar stats de %.12s: %w", id, err)
 	}
 	return st, nil
+}
+
+func (c *Client) ContainerLogs(ctx context.Context, id string, opts LogsOptions) (io.ReadCloser, error) {
+	rc, err := c.cli.ContainerLogs(ctx, id, client.ContainerLogsOptions{
+		ShowStdout: true, ShowStderr: true, Timestamps: true, Follow: opts.Follow,
+		Tail: strconv.Itoa(max(opts.Tail, 0)),
+	})
+	switch {
+	case cerrdefs.IsNotFound(err):
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
+	case cerrdefs.IsNotImplemented(err):
+		return nil, fmt.Errorf("%w: %v", ErrLogsUnsupported, err)
+	case err != nil:
+		return nil, err
+	}
+	return rc, nil
 }
 
 // FormatEventTime formats t as the "seconds.nanoseconds" form accepted by the

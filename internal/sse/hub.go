@@ -8,11 +8,8 @@
 package sse
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -144,15 +141,7 @@ func (h *Hub) Close() {
 }
 
 func (h *Hub) frame(event string, data []byte) []byte {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "id: %d\nevent: %s\n", h.seq.Add(1), event)
-	for line := range bytes.SplitSeq(data, []byte("\n")) {
-		b.WriteString("data: ")
-		b.Write(line)
-		b.WriteByte('\n')
-	}
-	b.WriteByte('\n')
-	return b.Bytes()
+	return encode(h.seq.Add(1), event, data)
 }
 
 // Serve streams events to one HTTP client until it disconnects, the hub
@@ -169,23 +158,11 @@ func (h *Hub) Serve(w http.ResponseWriter, r *http.Request, hello func() (string
 	}
 	defer h.Unsubscribe(c)
 
-	rc := http.NewResponseController(w)
-	hdr := w.Header()
-	hdr.Set("Content-Type", "text/event-stream; charset=utf-8")
-	hdr.Set("Cache-Control", "no-store")
-	hdr.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-
-	write := func(b []byte) bool {
-		_ = rc.SetWriteDeadline(time.Now().Add(h.opts.WriteTimeout))
-		if _, err := w.Write(b); err != nil {
-			return false
-		}
-		return rc.Flush() == nil
-	}
-	if !write([]byte("retry: " + strconv.FormatInt(h.opts.Retry.Milliseconds(), 10) + "\n\n")) {
+	st, err := Start(w, h.opts.Retry, h.opts.WriteTimeout)
+	if err != nil {
 		return
 	}
+	write := func(b []byte) bool { return st.write(b) == nil }
 	if hello != nil {
 		name, data := hello()
 		if !write(h.frame(name, data)) {

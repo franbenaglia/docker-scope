@@ -95,7 +95,7 @@ func run() error {
 
 	hub := sse.NewHub(sse.Options{})
 	apiSrv := &api.Server{
-		Inventory: inv, Metrics: col, History: st, Retention: retention, Hub: hub, Alerts: engine,
+		Inventory: inv, Metrics: col, History: st, Retention: retention, Hub: hub, Alerts: engine, Logs: src,
 		HeartbeatSeconds: 15, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
 	}
 	apiSrv.Attach(inv, col)

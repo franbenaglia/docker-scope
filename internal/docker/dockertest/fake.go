@@ -5,8 +5,10 @@ package dockertest
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"sync"
@@ -36,6 +38,9 @@ type Fake struct {
 	StatsFunc func(id string, now time.Time) container.StatsResponse
 	// StatsDelay is slept (outside the lock) before answering ContainerStats.
 	StatsDelay time.Duration
+	// LogsFunc produces the raw log stream (use Mux for multiplexed frames).
+	// Nil returns an empty stream. Must be safe for concurrent use.
+	LogsFunc func(ctx context.Context, id string, opts docker.LogsOptions) (io.ReadCloser, error)
 
 	Pings, Lists, Inspects, EventSubs, Stats atomic.Int64
 	inFlight, MaxInFlight                    atomic.Int64
@@ -159,6 +164,29 @@ func (f *Fake) ContainerStats(ctx context.Context, id string) (container.StatsRe
 		st.Read = now
 	}
 	return st, nil
+}
+
+func (f *Fake) ContainerLogs(ctx context.Context, id string, opts docker.LogsOptions) (io.ReadCloser, error) {
+	f.mu.Lock()
+	_, ok := f.ctrs[id]
+	down, fn := f.down, f.LogsFunc
+	f.mu.Unlock()
+	switch {
+	case down:
+		return nil, ErrDown
+	case !ok:
+		return nil, fmt.Errorf("%w: %s", docker.ErrNotFound, id)
+	case fn == nil:
+		return io.NopCloser(strings.NewReader("")), nil
+	}
+	return fn(ctx, id, opts)
+}
+
+// Mux encodes data as one multiplexed log frame (stream 1 = stdout, 2 = stderr).
+func Mux(stream byte, data string) []byte {
+	h := []byte{stream, 0, 0, 0, 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(h[4:], uint32(len(data)))
+	return append(h, data...)
 }
 
 func (f *Fake) Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error) {

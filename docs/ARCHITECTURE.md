@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapas 1–6 implementadas (config, docker, dockertest, inventory, collector, store, sse, alerts, demo, api, web). Previsto: logs.
+> Estado: etapas 1–7 implementadas (config, docker, dockertest, inventory, collector, store, sse, alerts, logs, demo, api, web).
 
 ## Estructura de directorios (prevista)
 ```
@@ -13,7 +13,7 @@ internal/inventory/     estado de contenedores en memoria, eventos, reconciliaci
 internal/collector/     muestreo de métricas, cálculo de deltas/tasas
 internal/store/         SQLite: migraciones, samples, incidents, rules, maintenance
 internal/alerts/        motor de reglas e incidentes
-internal/logs/          tail/follow, demux, buffers, sanitizado
+internal/logs/          parser de frames/TTY con timestamps, sanitizado, buffer acotado
 internal/api/           handlers REST, DTOs, validación, middleware de seguridad
 internal/sse/           hub SSE con colas acotadas
 internal/demo/          fuente de datos simulada
@@ -36,6 +36,10 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
   de la API en cada llamada), `ListContainers`, `InspectContainer` (devuelve `docker.ErrNotFound`),
   `Events(since)`, `ContainerStats` (one-shot), `Info` (NCPU, MemTotal, cgroup). Implementaciones:
   `docker.Client` y `dockertest.Fake` (con `StatsFunc`/`StatsDelay` y métricas de concurrencia).
+  `ContainerLogs(id, {Tail, Follow})` → stream crudo (`ErrLogsUnsupported` si el driver no permite leer);
+  el fake usa `LogsFunc` y `dockertest.Mux` para armar frames.
+- `logs.Parse(r, {TTY, Timestamps, MaxLineBytes}, emit)`, `logs.Sanitize`, `logs.Buffer`. Ver ADR-014.
+- `sse.Stream`: escritor SSE para una respuesta (headers, retry, deadline por escritura); lo usan el hub y el stream de logs.
 - `inventory.Inventory` ([internal/inventory](../internal/inventory/inventory.go)):
   - Una goroutine (`Run`) muta el estado; `Snapshot()` y `Get(id)` devuelven copias.
   - Sesión: ping → suscripción a eventos (con `since` = último evento procesado) → reconciliación
@@ -74,6 +78,8 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 | GET | `/api/containers/{id}` | `ContainerDetailDTO` | Sólo por ID completo (un prefijo da 404). ContainerDTO + image_id, labels, restart_max_retry, log_driver, tty, health_failing_streak, error. |
 | GET | `/api/stream` | SSE | Ver "Eventos SSE". |
 | GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
+| GET | `/api/containers/{id}/logs` | LogsDTO | `tail` 0–5000 (200). {container_id, tty, log_driver, lines[{time, stream stdout\|stderr\|tty\|system, text, truncated}], limited}. 409 `logs_unavailable`, 502 `docker_error`. |
+| GET | `/api/containers/{id}/logs/stream` | SSE | `tail` igual. Eventos: hello {container_id, container_name, tty, log_driver, tail}, lines {lines[]}, dropped {count}, heartbeat, end {reason, message}. 503 `too_many_streams` (máx. 8). |
 | GET | `/api/rules` | {items: RuleDTO[]} | RuleDTO: id, name, kind, enabled, scope{container,project,service}, threshold, threshold_unit, for/window/cooldown/recover_seconds, hysteresis, created_at, updated_at. |
 | POST | `/api/rules` | 201 RuleDTO | Body RuleInput (JSON estricto, máx. 64 KiB). 400 `validation_error`/`invalid_json`. |
 | PUT | `/api/rules/{id}` | RuleDTO | Resuelve los abiertos de la regla ("regla modificada"). 404 si no existe. |

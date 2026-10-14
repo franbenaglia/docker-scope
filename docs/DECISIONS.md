@@ -185,3 +185,25 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
 - Reglas sembradas: unhealthy 30 s y restarts 3/5 min habilitadas, memory 80 % durante 60 s
   habilitada, cpu 90 %/2 min deshabilitada (ejemplo). not_running no se siembra porque necesita alcance.
 - Limitación: el cooldown y los pendientes no sobreviven a un reinicio del agente (sí los abiertos).
+
+## ADR-014 — Logs
+**Estado:** Aceptada (2026-10-14)
+**Decisión:**
+- Se piden a Docker con `timestamps=true` y stdout+stderr. Si el contenedor no tiene TTY el stream
+  viene multiplexado: se parsea con un demuxer propio (no `stdcopy.StdCopy`) para conservar el
+  orden de llegada y etiquetar cada línea (stdout, stderr, system = stream 3 del daemon). Con TTY hay
+  un único stream sin frames: se etiqueta `tty`, porque Docker no permite distinguir stdout de stderr.
+- Líneas de máx. 8 KiB (el resto se descarta y se marca `truncated`); `\r` final eliminado; la
+  última línea sin `\n` se emite igual. Un frame inválido (p. ej. TTY tratado como multiplexado) da error.
+- Sanitizado en el servidor: se eliminan las secuencias ESC (CSI, OSC como títulos o hipervínculos,
+  DCS/APC/PM/SOS), los controles C0/C1 (salvo tab) y los overrides bidi/separadores; el UTF-8 inválido
+  pasa a U+FFFD. No se escapa HTML: la UI renderiza nodos de texto, nunca `{@html}`. Los colores ANSI se
+  pierden (decisión de seguridad y simplicidad).
+- `GET /logs?tail=N` (0–5000, 200 por defecto; timeout de 15 s; corta a 2 MiB → `limited`).
+  `GET /logs/stream?tail=N`: SSE propio (no el hub), eventos hello, lines (lotes de hasta 200 cada
+  200 ms), dropped {count}, heartbeat y end {reason eof|error}. Máximo 8 streams concurrentes (503).
+  Cola por stream de 2000 líneas / 1 MiB que descarta las más viejas y avisa con `dropped`. Cerrar la
+  conexión cancela el contexto, y con él la petición a Docker.
+- Driver sin lectura (Docker devuelve NotImplemented) → 409 `logs_unavailable`, con un mensaje que nombra
+  el driver y las alternativas (json-file, local, journald, dual logging).
+- Nunca se guardan logs en SQLite ni en disco.
