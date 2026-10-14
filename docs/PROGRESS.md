@@ -3,14 +3,13 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 4 — Persistencia SQLite
-- **Último paso completado:** `internal/store`: apertura con permisos 0700/0600 (verificado también el
-  `-wal`), migraciones embebidas versionadas, muestras crudas, rollup por minuto con marca de agua,
-  retención, series reducidas (crudas o 1m) y `Writer` con cola acotada. Tests en verde. Todavía no
-  está conectado en main ni en la API.
-- **Próximo paso:** Conectar el store en main (BD separada para demo), alimentarlo desde
-  `collector.OnRound` e `inventory.OnChange`, crear `GET /api/containers/{id}/series` con
-  validación, registrar ADR-011 y verificar que las series sobreviven a un reinicio del agente.
+- **Etapa:** 5 — API REST y SSE general
+- **Último paso completado:** Etapa 4 cerrada. SQLite (`<data_dir>/dockerscope.db`, o
+  `dockerscope-demo.db` en el modo demo) alimentado por el writer desde el colector y el inventario;
+  `GET /api/containers/{id}/series` con validación, recorte a la retención y buckets "lindos".
+- **Próximo paso:** Etapa 5: middleware de seguridad (Host, Origin y sin CORS), detalle
+  `GET /api/containers/{id}`, filtros y paginación en `/api/containers`, hub SSE (`/api/stream`) con
+  eventos tipados, heartbeat y colas acotadas con `resync`. Leer la etapa 5 en PLAN.md.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -34,6 +33,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 4 | Store SQLite (migraciones, crudas + rollup 1m, retención, writer con cola acotada), endpoint de series. Bug corregido: los lotes desencolados durante el apagado se perdían por usar el contexto cancelado. Verificado contra Docker real reiniciando el agente. |
 | 2026-10-14 | 3 | Colector de métricas + Info del host; métricas en la API y el panel; demo con stats sintéticas. Contrastado con `docker stats` real (contenedores dsp-*). |
 | 2026-10-14 | 2 | Inventario (eventos, reconciliación, backoff, dedup, reinicios observados), fake Docker, API desde el inventario, panel con stale. Verificado contra Docker real (contenedores de prueba dsprobe*) y con desconexión vía proxy. |
 | 2026-10-14 | 1→2 | Módulo renombrado a github.com/franbenaglia/docker-scope (ADR-007), remoto origin configurado (sin push). |

@@ -216,16 +216,13 @@ func (s *Store) Series(ctx context.Context, q SeriesQuery) (Series, error) {
 	// Buckets are aligned to the epoch, so a span touches up to span/bucket+1
 	// of them: size for MaxPoints−1 intervals to never exceed MaxPoints.
 	minBucket := ceilDiv(span, max(1, q.MaxPoints-1))
-	bucket := max(q.Step, minBucket)
+	bucket := niceBucket(max(q.Step, minBucket))
 	table, source := "samples", "raw"
 	cols := `AVG(cpu_pct), MAX(cpu_pct), AVG(mem_used), MAX(mem_used), MAX(mem_limit), AVG(mem_pct), MAX(mem_pct),
 		AVG(net_rx_bps), AVG(net_tx_bps), AVG(blk_read_bps), AVG(blk_write_bps), MAX(pids)`
 	if q.From.Before(q.RawSince) {
 		table, source = "samples_1m", "1m"
-		bucket = max(time.Minute, bucket).Truncate(time.Minute)
-		if bucket < minBucket {
-			bucket += time.Minute
-		}
+		bucket = niceBucket(max(time.Minute, bucket)) // nice values ≥ 1m are whole minutes
 		cols = `AVG(cpu_avg), MAX(cpu_max), AVG(mem_avg), MAX(mem_max), MAX(mem_limit), AVG(mem_pct_avg), MAX(mem_pct_max),
 			AVG(net_rx_bps), AVG(net_tx_bps), AVG(blk_read_bps), AVG(blk_write_bps), MAX(pids_max)`
 	}
@@ -260,6 +257,24 @@ func (s *Store) Series(ctx context.Context, q SeriesQuery) (Series, error) {
 	return out, rows.Err()
 }
 
+// niceBuckets are bucket widths that align chart axes to round times.
+var niceBuckets = []time.Duration{
+	time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second, 30 * time.Second,
+	time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute, 15 * time.Minute, 30 * time.Minute,
+	time.Hour, 2 * time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+}
+
+// niceBucket returns the smallest nice width ≥ d (whole days beyond 24h).
+func niceBucket(d time.Duration) time.Duration {
+	for _, b := range niceBuckets {
+		if b >= d {
+			return b
+		}
+	}
+	day := 24 * time.Hour
+	return (d + day - 1) / day * day
+}
+
 func ceilDiv(d time.Duration, n int) time.Duration {
 	return (d + time.Duration(n) - 1) / time.Duration(n)
 }
@@ -274,4 +289,14 @@ func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// ContainerKnown reports whether the container has ever been recorded.
+func (s *Store) ContainerKnown(ctx context.Context, id string) (bool, error) {
+	var one int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM containers WHERE id = ?`, id).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }

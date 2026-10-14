@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapas 1–3 implementadas (config, docker, dockertest, inventory, collector, demo, api, web). El resto de los paquetes son previstos.
+> Estado: etapas 1–4 implementadas (config, docker, dockertest, inventory, collector, store, demo, api, web). El resto de los paquetes son previstos.
 
 ## Estructura de directorios (prevista)
 ```
@@ -50,6 +50,10 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
 - `collector.Collector` ([internal/collector](../internal/collector/collector.go)): `Run` hace una
   ronda por intervalo, `Latest(id)`/`LatestAll()` son copias, y `OnRound(Round)` es el listener para la
   persistencia (etapa 4), las alertas (6) y el SSE (5). Cálculos puros en `calc.go` (`extract` + `compute`), ver ADR-010.
+- `store.Store` ([internal/store](../internal/store/store.go)): `Open(dir, name)` con migraciones,
+  `InsertSamples`, `UpsertContainers`, `Rollup`, `Prune`, `Series(SeriesQuery)`, `ContainerKnown`.
+  `store.Writer`: un único goroutine de escritura, `EnqueueSamples(Round)` (vía `collector.OnRound`) y
+  `EnqueueContainers` (vía `inventory.OnChange`); rollup cada minuto y prune cada hora. Ver ADR-011.
 - Config ([internal/config](../internal/config/config.go)): valores por defecto < JSON (`--config`) < flags.
   Ejemplo en [deploy/config.example.json](../deploy/config.example.json).
 - Frontend embebido: paquete `web` (`web.Dist()`), `//go:embed all:dist`. `web/dist/.gitkeep`
@@ -70,10 +74,18 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 `mem_*` (uso sin caché, límite efectivo, explícito o no, %), `net_*_bytes` (acumulados) y `net_*_bps`, `blk_*`, `pids`.
 Todos los valores numéricos pueden ser null (no disponible).
 
+| GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
+
 _(completar el resto en la etapa 5)_
 
 ## Eventos SSE
 _(completar en etapa 5)_
 
 ## Esquema SQLite
-_(completar en etapa 4)_
+Ver [internal/store/migrations](../internal/store/migrations/). Tiempos en ms Unix UTC.
+- `containers(id PK, name, image, compose_project, compose_service, first_seen, last_seen, removed_at)`
+- `samples(container_id, ts) PK WITHOUT ROWID`: cpu_pct, mem_used, mem_limit, mem_limit_explicit, mem_pct,
+  net_rx/tx_bps, blk_read/write_bps, pids. Índice por ts.
+- `samples_1m(container_id, ts) PK`: n, cpu_avg/max, mem_avg/max, mem_limit, mem_pct_avg/max, tasas, pids_max.
+- `settings(key PK, value)`: p. ej. `rollup_1m_until`.
+- `schema_migrations(version PK, applied_at)`.

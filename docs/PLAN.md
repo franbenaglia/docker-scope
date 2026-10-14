@@ -53,15 +53,18 @@ no se reinició el daemon del host._
 _Cerrada: valores contrastados con `docker stats` en el host (CPU 101 % / 50,5 % con --cpus 0.5, memoria, block I/O)._
 
 ## Etapa 4 — Persistencia SQLite
-- [ ] Migraciones versionadas embebidas
-- [ ] Tablas: samples, incidents, rules, maintenance, settings
-- [ ] Inserción por lotes, timestamps UTC, índices
-- [ ] Retención (7 días por defecto) con limpieza periódica
-- [ ] Consultas acotadas + downsampling para rangos largos
-- [ ] Permisos del archivo (0600) y del data dir (0700)
-- [ ] Tests de persistencia, retención y downsampling
+- [x] Migraciones versionadas embebidas
+- [x] Tablas: containers, samples, samples_1m, settings (incidents, rules y maintenance se crean con
+      una migración en la etapa 6, junto al motor que las define)
+- [x] Inserción por lotes, timestamps UTC, índices
+- [x] Retención (7 días por defecto) con limpieza periódica (crudas min(24h, retención), rollups 1m retención)
+- [x] Consultas acotadas + downsampling para rangos largos (`GET /api/containers/{id}/series`)
+- [x] Permisos del archivo (0600) y del data dir (0700)
+- [x] Tests de persistencia, retención y downsampling
 
 **Terminado cuando:** las series sobreviven a un reinicio del agente y la retención funciona en tests.
+
+_Cerrada: verificado con Docker real (contenedor dsp-hist), reiniciando el agente con SIGTERM._
 
 ## Etapa 5 — API REST y SSE general
 - [ ] DTOs, validación, formato de error uniforme, límites de rango, paginación
@@ -81,6 +84,7 @@ _Cerrada: valores contrastados con `docker stats` en el host (CPU 101 % / 50,5 %
 - [ ] Sin alertas "se detuvo" para contenedores ya detenidos al arranque
 - [ ] Causa probable a partir de eventos y exit code (redacción no categórica)
 - [ ] Mantenimiento global y por contenedor con vencimiento; suprime avisos, no recolección
+- [ ] Migración 002: tablas incidents, rules, maintenance
 - [ ] Persistencia de incidentes y recuperación
 - [ ] Tests exhaustivos: duración, recuperación, cooldown, mantenimiento, reinicios en ventana,
       histéresis, arranque

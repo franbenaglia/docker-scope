@@ -108,3 +108,24 @@ usa una sola fuente: demo o Docker, nunca las dos.
 - Un contenedor detenido o que falla en la ronda sale del conjunto de "últimas muestras".
 - Agregados (`/api/summary.resources`): suma de núcleos y de bytes de los contenedores con dato,
   con el denominador del host (Info: NCPU, MemTotal) y cuántos contenedores entran en la suma.
+
+## ADR-011 — Almacenamiento de métricas: crudas 24 h + rollups de 1 minuto
+**Estado:** Aceptada (2026-10-14)
+**Contexto:** 7 días de muestras cada 5 s son unas 120 mil filas por contenedor. SPEC pide 7 días de
+retención, consultas acotadas y reducir puntos en los gráficos largos.
+**Decisión:**
+- `samples`: muestras crudas durante min(24 h, retención). `samples_1m`: avg/max por minuto durante
+  toda la retención. Las acumula `Rollup` cada minuto (minutos completos con 30 s de margen), es
+  idempotente y retoma desde la marca de agua guardada en `settings`.
+- Series: si `from` cae dentro de la ventana de crudas se agrupa sobre `samples`; si no, sobre
+  `samples_1m`. Buckets alineados a epoch y redondeados a valores "lindos" (1 s…24 h), dimensionados
+  para que el resultado nunca supere `points` (10–1000, 300 por defecto). Rango mínimo 1 min; se
+  recorta a la retención y a "ahora"; `to` es inclusivo. Avg ignora los NULL (sin dato ≠ 0).
+- Sólo se guardan tasas (no acumulados de red y disco) y la memoria; nunca contenidos de logs.
+- Escrituras serializadas en un goroutine (`Writer`) con cola de 256 lotes: si se llena se
+  descarta y se cuenta, sin bloquear el muestreo. Cada escritura tiene su propio timeout de 10 s,
+  desacoplado de la cancelación, para no perder lotes durante el apagado (había un bug).
+- SQLite (modernc, sin cgo) en WAL + `synchronous=NORMAL` + `busy_timeout=5000`. Directorio 0700 y
+  archivo 0600, creado antes de abrir para que `-wal`/`-shm` hereden 0600. El modo demo usa
+  `dockerscope-demo.db`.
+- Las tablas de incidentes, reglas y mantenimiento llegan en la migración 002 (etapa 6).

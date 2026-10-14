@@ -121,8 +121,8 @@ func TestSeriesRawDownsampling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ds.Bucket < 65*time.Second/3 {
-		t.Errorf("bucket = %s, want ≥ 65s/3 para no superar 4 puntos", ds.Bucket)
+	if ds.Bucket != 30*time.Second {
+		t.Errorf("bucket = %s, want 30s (el valor lindo ≥ 65s/3)", ds.Bucket)
 	}
 	if len(ds.Points) > 4 {
 		t.Errorf("puntos = %d, máximo 4", len(ds.Points))
@@ -237,5 +237,45 @@ func TestWriterFlushesAndDrops(t *testing.T) {
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM samples`).Scan(&n); err != nil || n != 2 {
 		t.Errorf("filas tras flush = %d, %v", n, err)
+	}
+}
+
+func TestNiceBucket(t *testing.T) {
+	cases := map[time.Duration]time.Duration{
+		time.Millisecond:        time.Second,
+		5 * time.Second:         5 * time.Second,
+		6122 * time.Millisecond: 10 * time.Second,
+		61 * time.Second:        2 * time.Minute,
+		7 * time.Hour:           12 * time.Hour,
+		25 * time.Hour:          48 * time.Hour,
+	}
+	for in, want := range cases {
+		if got := niceBucket(in); got != want {
+			t.Errorf("niceBucket(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+func TestSeriesNeverExceedsMaxPoints(t *testing.T) {
+	s := open(t, t.TempDir())
+	var batch []collector.Sample
+	for i := range 720 { // 1h of 5s samples
+		batch = append(batch, sample("a", i*5, 1, 1))
+	}
+	if err := s.InsertSamples(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+	for _, mp := range []int{2, 7, 10, 59, 100, 333, 1000} {
+		for _, off := range []time.Duration{0, 1234 * time.Millisecond, 17 * time.Second} {
+			q := SeriesQuery{ContainerID: "a", From: t0.Add(off), To: t0.Add(time.Hour + off), MaxPoints: mp,
+				Step: 5 * time.Second, RawSince: t0.Add(-time.Hour)}
+			ser, err := s.Series(ctx, q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(ser.Points) > mp {
+				t.Errorf("max=%d off=%s: %d puntos (bucket %s)", mp, off, len(ser.Points), ser.Bucket)
+			}
+		}
 	}
 }

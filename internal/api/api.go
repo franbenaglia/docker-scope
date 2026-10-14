@@ -11,6 +11,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 
 	"github.com/franbenaglia/docker-scope/internal/inventory"
+	"github.com/franbenaglia/docker-scope/internal/store"
 )
 
 // Inventory is the read side of inventory.Inventory.
@@ -22,6 +23,8 @@ type Inventory interface {
 type Server struct {
 	Inventory Inventory
 	Metrics   Metrics
+	History   History
+	Retention store.Retention
 	Mode      string // "docker" or "demo"
 	Web       fs.FS  // built frontend (index.html at the root)
 	Log       *slog.Logger
@@ -33,6 +36,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/summary", s.handleSummary)
 	mux.HandleFunc("GET /api/containers", s.handleContainers)
+	mux.HandleFunc("GET /api/containers/{id}/series", s.handleSeries)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint inexistente")
 	})

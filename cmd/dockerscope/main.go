@@ -21,6 +21,7 @@ import (
 	"github.com/franbenaglia/docker-scope/internal/demo"
 	"github.com/franbenaglia/docker-scope/internal/docker"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
+	"github.com/franbenaglia/docker-scope/internal/store"
 	"github.com/franbenaglia/docker-scope/web"
 )
 
@@ -56,11 +57,29 @@ func run() error {
 		src = cli
 	}
 
+	// Demo data lives in its own database file: never mixed with real history.
+	dbName := "dockerscope.db"
+	if cfg.Demo {
+		dbName = "dockerscope-demo.db"
+	}
+	st, err := store.Open(ctx, cfg.DataDir, dbName, log.With("comp", "store"))
+	if err != nil {
+		return err
+	}
+	defer st.Close() // runs after the goroutines below have stopped
+	log.Info("base de datos", "ruta", st.Path())
+	retention := store.Retention{Raw: min(24*time.Hour, cfg.Retention.D()), Rollups: cfg.Retention.D()}
+	writer := store.NewWriter(st, store.WriterOptions{Retention: retention})
+
 	inv := inventory.New(src, inventory.Options{Log: log.With("comp", "inventory")})
+	inv.OnChange(func(ch inventory.Change) { writer.EnqueueContainers(containerMeta(ch)) })
 	col := collector.New(src, inv, collector.Options{
 		Interval: cfg.SampleInterval.D(), Log: log.With("comp", "collector"),
 	})
+	col.OnRound(writer.EnqueueSamples)
+
 	var wg sync.WaitGroup
+	wg.Go(func() { _ = writer.Run(ctx) })
 	wg.Go(func() { _ = inv.Run(ctx) })
 	wg.Go(func() { _ = col.Run(ctx) })
 	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
@@ -68,7 +87,7 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
-			Inventory: inv, Metrics: col, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
+			Inventory: inv, Metrics: col, History: st, Retention: retention, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -135,4 +154,15 @@ func loadConfig(args []string) (config.Config, error) {
 		return cfg, fmt.Errorf("configuración inválida:\n%w", err)
 	}
 	return cfg, nil
+}
+
+func containerMeta(ch inventory.Change) store.ContainerMeta {
+	if ch.Kind == inventory.Removed {
+		return store.ContainerMeta{ID: ch.ID, SeenAt: ch.At, Removed: true}
+	}
+	c := ch.Cur
+	return store.ContainerMeta{
+		ID: c.ID, Name: c.Name, Image: c.Image, ComposeProject: c.ComposeProject,
+		ComposeService: c.ComposeService, SeenAt: ch.At,
+	}
 }
