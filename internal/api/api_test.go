@@ -121,7 +121,7 @@ func TestContainersList(t *testing.T) {
 	if len(out.Items) != 2 || !out.Synced {
 		t.Fatalf("items = %d", len(out.Items))
 	}
-	web, old := out.Items[0], out.Items[1]
+	old, web := out.Items[0], out.Items[1] // sorted by name
 	if web.ShortID != "0123456789ab" || web.UptimeSeconds == nil || *web.UptimeSeconds != 90 || !web.HealthCurrent {
 		t.Errorf("web: %+v", web)
 	}

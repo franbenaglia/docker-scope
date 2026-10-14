@@ -10,6 +10,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 
+	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
 	"github.com/franbenaglia/docker-scope/internal/store"
 )
@@ -36,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/summary", s.handleSummary)
 	mux.HandleFunc("GET /api/containers", s.handleContainers)
+	mux.HandleFunc("GET /api/containers/{id}", s.handleContainer)
 	mux.HandleFunc("GET /api/containers/{id}/series", s.handleSeries)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint inexistente")
@@ -118,12 +120,6 @@ type ContainerDTO struct {
 	Metrics *MetricsDTO `json:"metrics"`
 }
 
-// ContainerListDTO is the response of GET /api/containers.
-type ContainerListDTO struct {
-	DataStateDTO
-	Items []ContainerDTO `json:"items"`
-}
-
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	snap := s.Inventory.Snapshot()
 	out := SummaryDTO{
@@ -141,19 +137,13 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
-	snap := s.Inventory.Snapshot()
-	now := s.Now()
-	latest := s.Metrics.LatestAll()
-	out := ContainerListDTO{DataStateDTO: dataState(snap), Items: make([]ContainerDTO, 0, len(snap.Containers))}
-	for _, c := range snap.Containers {
-		d := containerDTO(c, now)
-		if m, ok := latest[c.ID]; ok && c.Running() {
-			d.Metrics = metricsDTO(m)
-		}
-		out.Items = append(out.Items, d)
+// containerWithMetrics builds the DTO of c with its latest sample, if any.
+func (s *Server) containerWithMetrics(c *inventory.Container, latest map[string]collector.Sample, now time.Time) ContainerDTO {
+	d := containerDTO(c, now)
+	if m, ok := latest[c.ID]; ok && c.Running() {
+		d.Metrics = metricsDTO(m)
 	}
-	writeJSON(w, http.StatusOK, out)
+	return d
 }
 
 func daemonDTO(c inventory.ConnState) DaemonDTO {

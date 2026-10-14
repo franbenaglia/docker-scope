@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -127,6 +128,7 @@ func loadConfig(args []string) (config.Config, error) {
 	dataDir := fsFlags.String("data-dir", "", "directorio de datos (SQLite)")
 	interval := fsFlags.Duration("interval", 0, "intervalo de muestreo de métricas (p.ej. 5s)")
 	demoMode := fsFlags.Bool("demo", false, "modo demo con datos simulados (sin Docker)")
+	allowOrigin := fsFlags.String("allow-origin", "", "orígenes extra (loopback) permitidos para mutaciones, separados por coma; p. ej. el servidor de Vite en desarrollo")
 	if err := fsFlags.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -148,6 +150,13 @@ func loadConfig(args []string) (config.Config, error) {
 			cfg.SampleInterval = config.Duration(*interval)
 		case "demo":
 			cfg.Demo = *demoMode
+		case "allow-origin":
+			cfg.AllowedOrigins = nil
+			for o := range strings.SplitSeq(*allowOrigin, ",") {
+				if o = strings.TrimSpace(o); o != "" {
+					cfg.AllowedOrigins = append(cfg.AllowedOrigins, o)
+				}
+			}
 		}
 	})
 	if err := cfg.Validate(); err != nil {

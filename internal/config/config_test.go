@@ -74,3 +74,24 @@ func TestLoadFile(t *testing.T) {
 		t.Error("campo desconocido debería fallar")
 	}
 }
+
+func TestValidateOrigins(t *testing.T) {
+	cases := map[string]bool{
+		"http://127.0.0.1:5173": true,
+		"http://localhost:5173": true,
+		"https://[::1]:8443":    true,
+		"http://evil.com":       false,
+		"http://192.168.0.2:80": false,
+		"ftp://127.0.0.1":       false,
+		"127.0.0.1:5173":        false,
+		"http://127.0.0.1/x":    false,
+		"http://u@127.0.0.1:1":  false,
+	}
+	for o, ok := range cases {
+		c := Default()
+		c.AllowedOrigins = []string{o}
+		if err := c.Validate(); (err == nil) != ok {
+			t.Errorf("%q: ok=%v err=%v", o, ok, err)
+		}
+	}
+}

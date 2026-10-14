@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
 	"os"
 	"time"
 )
@@ -28,6 +29,9 @@ type Config struct {
 	Retention Duration `json:"retention"`
 	// Demo runs with simulated data and no Docker connection.
 	Demo bool `json:"demo"`
+	// AllowedOrigins are extra origins accepted for API mutations, e.g. the
+	// Vite dev server "http://127.0.0.1:5173". Loopback hosts only.
+	AllowedOrigins []string `json:"allowed_origins"`
 }
 
 // Default returns the default configuration.
@@ -67,6 +71,11 @@ func (c Config) Validate() error {
 	if d := c.Retention.D(); d < time.Hour || d > 365*24*time.Hour {
 		errs = append(errs, fmt.Errorf("retention debe estar entre 1h y 365d (es %s)", d))
 	}
+	for _, o := range c.AllowedOrigins {
+		if err := validateOrigin(o); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if c.DataDir == "" {
 		errs = append(errs, errors.New("data_dir no puede estar vacío"))
 	}
@@ -88,6 +97,22 @@ func validateLoopback(listen string) error {
 	if err != nil || !addr.IsLoopback() {
 		return fmt.Errorf("listen %q: sólo se permiten direcciones loopback (127.0.0.1, ::1, localhost); "+
 			"para acceso remoto use un túnel SSH (ver README)", listen)
+	}
+	return nil
+}
+
+func validateOrigin(o string) error {
+	u, err := url.Parse(o)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.User != nil {
+		return fmt.Errorf("allowed_origins: %q no es un origen válido (ej. http://127.0.0.1:5173)", o)
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return nil
+	}
+	if addr, err := netip.ParseAddr(host); err != nil || !addr.IsLoopback() {
+		return fmt.Errorf("allowed_origins: %q debe ser un origen loopback", o)
 	}
 	return nil
 }
