@@ -9,3 +9,4 @@ web/dist/*
 !web/dist/.gitkeep
 .env
 /.playwright-mcp/
+deploy/test-compose/state/

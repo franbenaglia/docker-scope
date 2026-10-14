@@ -6,7 +6,7 @@ WEB        := web
 GOFLAGS_B  := -trimpath -ldflags="-s -w" -buildvcs=false
 LISTEN     ?= 127.0.0.1:8080
 
-.PHONY: help dev dev-api dev-web demo test vet web-install web-build web-check build check clean
+.PHONY: help dev dev-api dev-web demo test vet web-install web-build web-check build check clean test-env-up test-env-down
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -50,6 +50,12 @@ dev: web-install ## Agente + Vite en paralelo (Ctrl+C detiene ambos)
 
 demo: build ## Ejecuta el binario en modo demo (datos simulados, sin Docker)
 	$(BIN) -demo -listen $(LISTEN) -data-dir ./data-demo
+
+test-env-up: ## Levanta el Compose de prueba (deploy/test-compose; ver scenario.sh)
+	deploy/test-compose/scenario.sh up
+
+test-env-down: ## Elimina el Compose de prueba
+	deploy/test-compose/scenario.sh down
 
 clean: ## Borra artefactos de build
 	rm -rf bin $(WEB)/dist/assets $(WEB)/dist/index.html

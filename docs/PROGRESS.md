@@ -4,14 +4,12 @@
 
 ## Estado actual
 - **Etapa:** 11 — Distribución y documentación
-- **Último paso completado:** Etapa 10 cerrada. Demo dinámico (`demo.Demo.Run`, escenario de 4 min
-  con un factor de escala testeable; regla "Demo: servicio detenido" sólo en la BD del demo) y revisión
-  de seguridad (logs sin secretos, `MaxHeaderBytes`, sin ReadTimeout por SSE, govulncheck y npm audit
-  limpios, CSP sin violaciones). Riesgo documentado: otros usuarios locales del host pueden usar el panel.
-- **Próximo paso:** Etapa 11: `deploy/test-compose/` (servicio normal, con HEALTHCHECK, fallo/reinicio
-  controlado), unidad systemd de ejemplo (usuario dedicado, grupo docker, data dir 0700, hardening),
-  y el README completo (requisitos, instalación, permisos del socket y rootless, túnel SSH, retención,
-  fórmulas de métricas, limitaciones, incluido el riesgo multiusuario de ADR-017).
+- **Último paso completado:** `deploy/test-compose/` (web nginx, health con HEALTHCHECK controlable,
+  flaky con fallo controlado y `on-failure:5`; `scenario.sh` up|down|unhealthy|healthy|crash|fix|stop-web|
+  start-web|status, sólo el proyecto dockerscope-test; verificado contra Docker real) y la unidad systemd
+  de ejemplo (`deploy/systemd/dockerscope.service`, con hardening; `systemd-analyze verify` sin errores, no
+  instalada). Targets `make test-env-up/down`.
+- **Próximo paso:** README.md completo (ver la lista en PLAN etapa 11) y cerrar la etapa.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -22,6 +20,7 @@
 _(lo que no pudo probarse y por qué)_
 - Etapa 1: `make dev` (agente + Vite en paralelo) no se probó de forma interactiva; `make check` y
   el binario sí.
+- Etapa 11: la unidad systemd no se instaló ni se ejecutó como servicio (requiere root); sólo `systemd-analyze verify`.
 - Etapa 10 (posible mejora fuera de SPEC): en hosts multiusuario, cualquier usuario local puede abrir el
   panel. Opciones futuras: escuchar en un socket unix con permisos (accesible por `ssh -L`) o un token local.
 - Etapa 9: notificaciones del navegador no probadas de forma interactiva (el navegador headless no concede el permiso).

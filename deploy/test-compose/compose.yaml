@@ -1,0 +1,43 @@
+# Entorno de prueba de DockerScope. Sólo usa contenedores de este proyecto
+# ("dockerscope-test"); manejarlo con ./scenario.sh (ver README).
+name: dockerscope-test
+
+services:
+  # Servicio normal, sin healthcheck propio de interés.
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+
+  # Servicio con HEALTHCHECK controlable: healthy mientras exista /tmp/healthy.
+  #   ./scenario.sh unhealthy  → borra el archivo (unhealthy en ~10 s)
+  #   ./scenario.sh healthy    → lo recrea
+  health:
+    image: busybox:1.37
+    command: ["sh", "-c", "touch /tmp/healthy; echo 'health listo'; while :; do sleep 3600; done"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/healthy"]
+      interval: 5s
+      timeout: 2s
+      retries: 2
+      start_period: 5s
+    restart: unless-stopped
+
+  # Fallo/reinicio controlado: si existe state/crash, el proceso sale con código 3
+  # y Docker lo reinicia (on-failure, hasta 5 veces) → bucle de reinicios.
+  #   ./scenario.sh crash  → crea state/crash
+  #   ./scenario.sh fix    → lo borra y vuelve a iniciar el servicio
+  flaky:
+    image: busybox:1.37
+    restart: on-failure:5
+    volumes:
+      - ./state:/state
+    command:
+      - sh
+      - -c
+      - |
+        echo "arranque $$(date +%T)"
+        while :; do
+          if [ -f /state/crash ]; then echo "fallo controlado: saliendo con código 3" >&2; exit 3; fi
+          echo "trabajando $$(date +%T)"
+          sleep 2
+        done

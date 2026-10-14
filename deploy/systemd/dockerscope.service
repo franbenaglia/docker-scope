@@ -1,0 +1,66 @@
+# Unidad systemd de ejemplo para DockerScope (ver README, sección "Instalación como servicio").
+#
+# Requisitos previos (como root):
+#   useradd --system --no-create-home --shell /usr/sbin/nologin dockerscope
+#   install -m 0755 bin/dockerscope /usr/local/bin/dockerscope
+#   install -d -m 0750 /etc/dockerscope
+#   install -m 0640 -g dockerscope deploy/config.example.json /etc/dockerscope/config.json
+#
+# Seguridad: el grupo "docker" da acceso al socket de Docker, que equivale a
+# root en el host (ver README). El servicio sólo lee de Docker, pero ese acceso
+# es amplio: por eso se aísla el proceso con las opciones de abajo.
+
+[Unit]
+Description=DockerScope - monitor local de Docker
+Documentation=https://github.com/franbenaglia/docker-scope
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=dockerscope
+Group=dockerscope
+SupplementaryGroups=docker
+ExecStart=/usr/local/bin/dockerscope -config /etc/dockerscope/config.json
+Restart=on-failure
+RestartSec=5s
+
+# /var/lib/dockerscope (0700, propiedad de dockerscope): base SQLite.
+StateDirectory=dockerscope
+StateDirectoryMode=0700
+UMask=0077
+
+# Aislamiento. Conectarse al socket de Docker funciona con el sistema de
+# archivos en sólo lectura (connect() no escribe en el filesystem).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# @system-service sin @privileged. No se excluye @resources: el runtime de Go
+# llama a setrlimit al iniciar y el filtro mataría el proceso.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+CapabilityBoundingSet=
+AmbientCapabilities=
+# El panel sólo escucha en loopback (ADR-004); además, el firewall de la unidad
+# rechaza cualquier tráfico IP que no sea local.
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
