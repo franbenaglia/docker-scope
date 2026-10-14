@@ -59,7 +59,7 @@ func TestSummaryConnected(t *testing.T) {
 	s := newServer(fakeDocker{list: []container.Summary{
 		{ID: "a", State: container.StateRunning, Health: &container.HealthSummary{Status: container.Unhealthy}},
 		{ID: "b", State: container.StateRunning},
-		{ID: "c", State: container.StateExited},
+		{ID: "c", State: container.StateExited, Health: &container.HealthSummary{Status: container.Unhealthy}},
 		{ID: "d", State: container.StateCreated},
 		{ID: "e", State: container.StatePaused},
 	}}, nil)

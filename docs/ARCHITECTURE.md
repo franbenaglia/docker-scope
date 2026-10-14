@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: **propuesta inicial** (aún sin código).
+> Estado: etapa 1 implementada (config, docker, demo, api, web). El resto de los paquetes son previstos.
 
 ## Estructura de directorios (prevista)
 ```
@@ -31,10 +31,23 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
 ```
 
 ## Interfaces clave
-_(completar en etapa 2)_
+- `docker.API` ([internal/docker/docker.go](../internal/docker/docker.go)): `Ping`, `ListContainers`.
+  Se amplía en la etapa 2. Implementaciones: `docker.Client` (moby SDK) y `demo.Source`.
+- Config ([internal/config](../internal/config/config.go)): valores por defecto < JSON (`--config`) < flags.
+  Ejemplo en [deploy/config.example.json](../deploy/config.example.json).
+- Frontend embebido: paquete `web` (`web.Dist()`), `//go:embed all:dist`. `web/dist/.gitkeep`
+  existe para que `go build` funcione sin compilar antes el panel.
 
 ## API REST
-_(completar en etapa 5)_
+Errores: `{"error":{"code":"...","message":"..."}}` (code en snake_case). JSON con `Cache-Control: no-store`.
+Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la SPA). `assets/*` son inmutables.
+
+| Método | Ruta | Respuesta | Notas |
+|---|---|---|---|
+| GET | `/api/summary` | `SummaryDTO` | `containers` es `null` si Docker no responde (desconocido ≠ 0). `unhealthy` cuenta sólo los que están en ejecución. `mode`: `docker`\|`demo`. |
+| * | `/api/*` desconocida | 404 `not_found` | |
+
+_(completar el resto en la etapa 5)_
 
 ## Eventos SSE
 _(completar en etapa 5)_

@@ -55,8 +55,8 @@ type CountsDTO struct {
 	Running    int `json:"running"`
 	Paused     int `json:"paused"`
 	Restarting int `json:"restarting"`
-	Stopped    int `json:"stopped"` // created, exited, dead, removing
-	Unhealthy  int `json:"unhealthy"`
+	Stopped    int `json:"stopped"`   // created, exited, dead, removing
+	Unhealthy  int `json:"unhealthy"` // running containers only
 }
 
 // handleSummary queries Docker directly. Stage 2 replaces this with the shared
@@ -97,7 +97,9 @@ func countContainers(list []container.Summary) CountsDTO {
 		default:
 			c.Stopped++
 		}
-		if ct.Health != nil && ct.Health.Status == container.Unhealthy {
+		// Docker keeps the last health status after a container exits; it is only
+		// meaningful while the container runs.
+		if ct.State == container.StateRunning && ct.Health != nil && ct.Health.Status == container.Unhealthy {
 			c.Unhealthy++
 		}
 	}

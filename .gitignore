@@ -1,5 +1,6 @@
 /bin/
 /data/
+/data-demo/
 *.db
 *.db-wal
 *.db-shm
@@ -7,3 +8,4 @@ web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
 .env
+/.playwright-mcp/

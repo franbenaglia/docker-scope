@@ -9,15 +9,15 @@ Referencia de alcance: [SPEC.md](SPEC.md). Decisiones: [DECISIONS.md](DECISIONS.
 - [x] git init, SPEC.md, CLAUDE.md, PLAN.md, PROGRESS.md, DECISIONS.md, ARCHITECTURE.md
 
 ## Etapa 1 — Esqueleto e integración mínima real
-- [ ] Verificar y fijar versiones: módulo del SDK Docker, driver SQLite, Svelte, Vite, Chart.js (ADR)
-- [ ] `go mod init`, estructura `cmd/dockerscope`, `internal/...`
-- [ ] Frontend `web/` con Vite + Svelte + TS estricto
-- [ ] `go:embed` del build de `web/dist`; servir SPA con fallback a index.html
-- [ ] Config mínima (flags + archivo de ejemplo): socket, listen addr, data dir, intervalo
-- [ ] Endpoint `GET /api/summary` real contra Docker (conteo running/stopped, estado daemon)
-- [ ] Página que muestra el resumen
-- [ ] Makefile: `dev`, `test`, `check`, `build`, `demo` (demo puede ser stub)
-- [ ] `.gitignore`
+- [x] Verificar y fijar versiones: módulo del SDK Docker, driver SQLite, Svelte, Vite, Chart.js (ADR)
+- [x] `go mod init`, estructura `cmd/dockerscope`, `internal/...`
+- [x] Frontend `web/` con Vite + Svelte + TS estricto
+- [x] `go:embed` del build de `web/dist`; servir SPA con fallback a index.html
+- [x] Config mínima (flags + archivo de ejemplo): socket, listen addr, data dir, intervalo
+- [x] Endpoint `GET /api/summary` real contra Docker (conteo running/stopped, estado daemon)
+- [x] Página que muestra el resumen
+- [x] Makefile: `dev`, `test`, `check`, `build`, `demo` (demo con datos estáticos)
+- [x] `.gitignore`
 
 **Terminado cuando:** `make check` pasa y `bin/dockerscope` sirve el panel en 127.0.0.1 mostrando
 conteos reales de Docker.
