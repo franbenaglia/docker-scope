@@ -12,6 +12,7 @@ import (
 
 	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
+	"github.com/franbenaglia/docker-scope/internal/sse"
 	"github.com/franbenaglia/docker-scope/internal/store"
 )
 
@@ -26,16 +27,21 @@ type Server struct {
 	Metrics   Metrics
 	History   History
 	Retention store.Retention
-	Mode      string // "docker" or "demo"
-	Web       fs.FS  // built frontend (index.html at the root)
-	Log       *slog.Logger
-	Now       func() time.Time
+	Hub       *sse.Hub
+	// HeartbeatSeconds is announced in the hello event (clients use it to
+	// detect a dead stream).
+	HeartbeatSeconds float64
+	Mode             string // "docker" or "demo"
+	Web              fs.FS  // built frontend (index.html at the root)
+	Log              *slog.Logger
+	Now              func() time.Time
 }
 
 // Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/summary", s.handleSummary)
+	mux.HandleFunc("GET /api/stream", s.handleStream)
 	mux.HandleFunc("GET /api/containers", s.handleContainers)
 	mux.HandleFunc("GET /api/containers/{id}", s.handleContainer)
 	mux.HandleFunc("GET /api/containers/{id}/series", s.handleSeries)
@@ -121,6 +127,10 @@ type ContainerDTO struct {
 }
 
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.summary())
+}
+
+func (s *Server) summary() SummaryDTO {
 	snap := s.Inventory.Snapshot()
 	out := SummaryDTO{
 		Mode:         s.Mode,
@@ -134,7 +144,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		r := resources(snap, s.Metrics.LatestAll(), s.Metrics.Interval())
 		out.Resources = &r
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out
 }
 
 // containerWithMetrics builds the DTO of c with its latest sample, if any.

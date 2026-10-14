@@ -4,12 +4,15 @@
 
 ## Estado actual
 - **Etapa:** 5 — API REST y SSE general
-- **Último paso completado:** Etapa 4 cerrada. SQLite (`<data_dir>/dockerscope.db`, o
-  `dockerscope-demo.db` en el modo demo) alimentado por el writer desde el colector y el inventario;
-  `GET /api/containers/{id}/series` con validación, recorte a la retención y buckets "lindos".
-- **Próximo paso:** Etapa 5: middleware de seguridad (Host, Origin y sin CORS), detalle
-  `GET /api/containers/{id}`, filtros y paginación en `/api/containers`, hub SSE (`/api/stream`) con
-  eventos tipados, heartbeat y colas acotadas con `resync`. Leer la etapa 5 en PLAN.md.
+- **Último paso completado:** Backend de la etapa 5: middleware de seguridad (Host, Origin y
+  Content-Type en las mutaciones, Sec-Fetch-Site, CSP y cabeceras, sin CORS), `allowed_origins` y
+  `-allow-origin`, `GET /api/containers/{id}`, filtros/orden/paginación en `/api/containers`, hub SSE
+  (`internal/sse`) y `GET /api/stream` con eventos tipados. Las goroutines arrancan después de
+  registrar los listeners. Tests en verde (-race).
+  Nota: el commit b5b413a no actualizó PROGRESS.md ni conectó el middleware en main (corregido en el siguiente).
+- **Próximo paso:** Frontend: reemplazar el sondeo por SSE (snapshot REST al conectar y al recibir
+  `resync`, y aplicar los eventos), estados de reconexión y stream muerto (sin heartbeat). Verificar en
+  el navegador y con curl (Host malicioso, Origin). Actualizar ARCHITECTURE (eventos SSE) y cerrar la etapa.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)

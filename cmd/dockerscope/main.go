@@ -22,6 +22,7 @@ import (
 	"github.com/franbenaglia/docker-scope/internal/demo"
 	"github.com/franbenaglia/docker-scope/internal/docker"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
+	"github.com/franbenaglia/docker-scope/internal/sse"
 	"github.com/franbenaglia/docker-scope/internal/store"
 	"github.com/franbenaglia/docker-scope/web"
 )
@@ -79,24 +80,32 @@ func run() error {
 	})
 	col.OnRound(writer.EnqueueSamples)
 
+
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("escuchar en %s: %w", cfg.Listen, err)
+	}
+	listenHost, listenPort, _ := net.SplitHostPort(ln.Addr().String())
+
+	hub := sse.NewHub(sse.Options{})
+	apiSrv := &api.Server{
+		Inventory: inv, Metrics: col, History: st, Retention: retention, Hub: hub,
+		HeartbeatSeconds: 15, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
+	}
+	apiSrv.Attach(inv, col)
+
+	// Start the background components only after every listener is registered.
 	var wg sync.WaitGroup
 	wg.Go(func() { _ = writer.Run(ctx) })
 	wg.Go(func() { _ = inv.Run(ctx) })
 	wg.Go(func() { _ = col.Run(ctx) })
 	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
-
+	sec := api.Security{ListenPort: listenPort, ExtraHosts: []string{listenHost}, AllowedOrigins: cfg.AllowedOrigins}
 	srv := &http.Server{
-		Addr: cfg.Listen,
-		Handler: (&api.Server{
-			Inventory: inv, Metrics: col, History: st, Retention: retention, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
-		}).Handler(),
+		Handler:           sec.Middleware(apiSrv.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
-		// No WriteTimeout: SSE streams are long-lived (stage 5 handles per-stream deadlines).
-	}
-	ln, err := net.Listen("tcp", cfg.Listen)
-	if err != nil {
-		return fmt.Errorf("escuchar en %s: %w", cfg.Listen, err)
+		// No WriteTimeout: SSE streams are long-lived; the hub sets a deadline per write.
 	}
 	log.Info("panel disponible", "url", "http://"+ln.Addr().String(), "modo", mode)
 
@@ -110,6 +119,7 @@ func run() error {
 		}
 	case <-ctx.Done():
 		log.Info("apagando")
+		hub.Close() // SSE handlers return, so Shutdown does not wait for them
 		shCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shCtx); err != nil {

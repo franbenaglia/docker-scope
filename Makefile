@@ -37,7 +37,7 @@ check: vet test web-check build ## Verificación completa (usar antes de cada co
 	@echo "check OK"
 
 dev-api: ## Agente Go en modo desarrollo (Docker real)
-	go run ./cmd/dockerscope -listen $(LISTEN) -data-dir ./data
+	go run ./cmd/dockerscope -listen $(LISTEN) -data-dir ./data -allow-origin http://127.0.0.1:5173
 
 dev-web: web-install ## Servidor Vite con recarga en http://127.0.0.1:5173 (proxy /api → agente)
 	cd $(WEB) && npm run dev

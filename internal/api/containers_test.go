@@ -111,4 +111,3 @@ func TestContainerDetail(t *testing.T) {
 		}
 	}
 }
-
