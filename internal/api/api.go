@@ -28,6 +28,7 @@ type Server struct {
 	History   History
 	Retention store.Retention
 	Hub       *sse.Hub
+	Alerts    Alerts
 	// HeartbeatSeconds is announced in the hello event (clients use it to
 	// detect a dead stream).
 	HeartbeatSeconds float64
@@ -45,6 +46,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/containers", s.handleContainers)
 	mux.HandleFunc("GET /api/containers/{id}", s.handleContainer)
 	mux.HandleFunc("GET /api/containers/{id}/series", s.handleSeries)
+	if s.Alerts != nil {
+		s.routeAlerts(mux)
+	}
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint inexistente")
 	})
@@ -75,9 +79,10 @@ type SummaryDTO struct {
 	Mode   string    `json:"mode"`
 	Daemon DaemonDTO `json:"daemon"`
 	DataStateDTO
-	Containers  *CountsDTO    `json:"containers"` // null until the first sync
-	Resources   *ResourcesDTO `json:"resources"`  // null until the first sync
-	GeneratedAt time.Time     `json:"generated_at"`
+	Containers  *CountsDTO        `json:"containers"` // null until the first sync
+	Resources   *ResourcesDTO     `json:"resources"`  // null until the first sync
+	Alerts      *AlertsSummaryDTO `json:"alerts"`
+	GeneratedAt time.Time         `json:"generated_at"`
 }
 
 // CountsDTO counts containers by state.
@@ -144,6 +149,7 @@ func (s *Server) summary() SummaryDTO {
 		r := resources(snap, s.Metrics.LatestAll(), s.Metrics.Interval())
 		out.Resources = &r
 	}
+	out.Alerts = s.alertsSummary()
 	return out
 }
 

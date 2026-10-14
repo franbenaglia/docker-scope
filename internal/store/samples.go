@@ -136,7 +136,7 @@ type Retention struct {
 }
 
 // PruneResult reports deleted rows.
-type PruneResult struct{ Samples, Rollups, Containers int64 }
+type PruneResult struct{ Samples, Rollups, Containers, Incidents int64 }
 
 // Prune deletes data older than the retention.
 func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneResult, error) {
@@ -151,7 +151,16 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 			return err
 		}
 		res.Containers, err = execCount(ctx, tx, `DELETE FROM containers WHERE removed_at IS NOT NULL AND removed_at < ?
-			AND NOT EXISTS (SELECT 1 FROM samples_1m WHERE container_id = containers.id)`, rollCut)
+			AND NOT EXISTS (SELECT 1 FROM samples_1m WHERE container_id = containers.id)
+			AND NOT EXISTS (SELECT 1 FROM incidents WHERE container_id = containers.id)`, rollCut)
+		if err != nil {
+			return err
+		}
+		if res.Incidents, err = execCount(ctx, tx, `DELETE FROM incidents WHERE state = 'resolved' AND resolved_at < ?`,
+			ms(now.Add(-IncidentRetention))); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM maintenance WHERE until < ?`, ms(now.Add(-24*time.Hour)))
 		return err
 	})
 	return res, err

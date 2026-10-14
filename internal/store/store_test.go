@@ -43,7 +43,7 @@ func sample(id string, sec int, cpu float64, mem uint64) collector.Sample {
 func TestOpenPermissionsAndMigrations(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	s := open(t, dir)
-	if v, err := s.SchemaVersion(ctx); err != nil || v != 1 {
+	if v, err := s.SchemaVersion(ctx); err != nil || v != 2 {
 		t.Fatalf("versión = %d, %v", v, err)
 	}
 	if err := s.InsertSamples(ctx, []collector.Sample{sample("a", 0, 1, 1)}); err != nil {
@@ -62,7 +62,7 @@ func TestOpenPermissionsAndMigrations(t *testing.T) {
 
 	// Reopening keeps data and does not reapply migrations.
 	s2 := open(t, dir)
-	if v, _ := s2.SchemaVersion(ctx); v != 1 {
+	if v, _ := s2.SchemaVersion(ctx); v != 2 {
 		t.Errorf("versión tras reabrir = %d", v)
 	}
 	ser, err := s2.Series(ctx, SeriesQuery{ContainerID: "a", From: t0.Add(-time.Minute), To: t0.Add(time.Minute),

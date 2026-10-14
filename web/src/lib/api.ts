@@ -39,12 +39,31 @@ export interface Resources {
   interval_seconds: number;
 }
 
+export interface Maintenance {
+  id: number;
+  /** Nombre del contenedor; "" = global. */
+  container: string;
+  global: boolean;
+  until: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface AlertsSummary {
+  open: number;
+  /** Abiertos sin reconocer (reconocer no resuelve). */
+  unacked: number;
+  pending: number;
+  maintenance: Maintenance[];
+}
+
 export interface Summary extends DataState {
   mode: 'docker' | 'demo';
   daemon: Daemon;
   /** null hasta la primera sincronización. */
   containers: Counts | null;
   resources: Resources | null;
+  alerts: AlertsSummary | null;
   generated_at: string;
 }
 

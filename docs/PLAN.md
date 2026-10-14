@@ -81,21 +81,23 @@ _Cerrada: verificado con Docker real (contenedor dsp-hist), reiniciando el agent
 _Cerrada: verificado con binario -race contra Docker real (alta y baja en vivo, caída y vuelta del agente) y curl (Host/Origin)._
 
 ## Etapa 6 — Motor de alertas
-- [ ] Reglas: deja de ejecutarse, unhealthy persistente, reinicios en ventana, CPU, memoria
-- [ ] Ámbito: contenedor y proyecto/servicio Compose
-- [ ] Estados pending/open/resolved; duración mínima, cooldown, deduplicación, histéresis
-- [ ] Acknowledge ≠ resolve
-- [ ] Sin alertas "se detuvo" para contenedores ya detenidos al arranque
-- [ ] Causa probable a partir de eventos y exit code (redacción no categórica)
-- [ ] Mantenimiento global y por contenedor con vencimiento; suprime avisos, no recolección
-- [ ] Migración 002: tablas incidents, rules, maintenance
-- [ ] Endpoints REST de incidents (lista paginada, ack), rules (CRUD) y maintenance (pasan por el middleware de mutaciones)
-- [ ] Eventos SSE `incident` (alta y cambios)
-- [ ] Persistencia de incidentes y recuperación
-- [ ] Tests exhaustivos: duración, recuperación, cooldown, mantenimiento, reinicios en ventana,
+- [x] Reglas: deja de ejecutarse, unhealthy persistente, reinicios en ventana, CPU, memoria
+- [x] Ámbito: contenedor y proyecto/servicio Compose
+- [x] Estados pending/open/resolved; duración mínima, cooldown, deduplicación, histéresis
+- [x] Acknowledge ≠ resolve
+- [x] Sin alertas "se detuvo" para contenedores ya detenidos al arranque
+- [x] Causa probable a partir de eventos y exit code (redacción no categórica)
+- [x] Mantenimiento global y por contenedor con vencimiento; suprime avisos, no recolección
+- [x] Migración 002: tablas incidents, rules, maintenance
+- [x] Endpoints REST de incidents (lista paginada, ack), rules (CRUD) y maintenance (pasan por el middleware de mutaciones)
+- [x] Eventos SSE `incident` (alta y cambios)
+- [x] Persistencia de incidentes y recuperación
+- [x] Tests exhaustivos: duración, recuperación, cooldown, mantenimiento, reinicios en ventana,
       histéresis, arranque
 
 **Terminado cuando:** todos los tests del motor pasan con reloj simulado.
+
+_Cerrada: 17 tests del motor + store + API; verificado contra Docker real (unhealthy, bucle de reinicios, kill de un contenedor vigilado, ack, mantenimiento con supresión, recuperación y eliminación, eventos SSE) con binario -race._
 
 ## Etapa 7 — Logs
 - [ ] Tail inicial 200 líneas, límite configurable acotado

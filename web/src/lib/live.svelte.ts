@@ -18,7 +18,7 @@ interface Hello {
 
 type Ev = { name: string; data: unknown };
 
-const EVENTS = ['hello', 'summary', 'daemon', 'container', 'container_removed', 'metrics', 'heartbeat', 'resync'];
+const EVENTS = ['hello', 'summary', 'daemon', 'container', 'container_removed', 'metrics', 'incident', 'heartbeat', 'resync'];
 
 class Live {
   summary = $state<Summary | null>(null);

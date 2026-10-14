@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
 
 	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
@@ -89,10 +91,15 @@ type track struct {
 	incident     *Incident // open incident or nil
 }
 
-type lastEvent struct {
-	action string
-	at     time.Time
+// recentEvents remembers the last few Docker events of a container and the
+// exit code of the last "die", to describe probable causes.
+type recentEvents struct {
+	actions  []string // oldest first, at most maxRecent
+	at       time.Time
+	exitCode *int
 }
+
+const maxRecent = 4
 
 // Engine evaluates rules. Load, register listeners, then Run.
 type Engine struct {
@@ -105,10 +112,10 @@ type Engine struct {
 	rules       map[int64]Rule
 	maint       []Maintenance
 	tracks      map[key]*track
-	seenRunning map[string]bool        // container ID observed running by the agent
-	restartLog  map[string][]time.Time // observed restart times per container ID
-	restartSeen map[string]int         // last ObservedRestarts per container ID
-	events      map[string]lastEvent   // last Docker event per container ID
+	seenRunning map[string]bool          // container ID observed running by the agent
+	restartLog  map[string][]time.Time   // observed restart times per container ID
+	restartSeen map[string]int           // last ObservedRestarts per container ID
+	events      map[string]*recentEvents // recent Docker events per container ID
 	listeners   []func(Event)
 }
 
@@ -127,7 +134,7 @@ func New(store Store, inv Inventory, met Metrics, opts Options) *Engine {
 		store: store, inv: inv, met: met, opts: opts,
 		rules: map[int64]Rule{}, tracks: map[key]*track{},
 		seenRunning: map[string]bool{}, restartLog: map[string][]time.Time{},
-		restartSeen: map[string]int{}, events: map[string]lastEvent{},
+		restartSeen: map[string]int{}, events: map[string]*recentEvents{},
 	}
 }
 
@@ -161,15 +168,33 @@ func (e *Engine) Load(ctx context.Context) error {
 	return nil
 }
 
-// Observe records the last Docker event of a container, used to describe
-// probable causes. Register with inventory.OnChange.
+// Observe records recent Docker events of a container (and the exit code of
+// "die" events), used to describe probable causes. Register with inventory.OnChange.
 func (e *Engine) Observe(ch inventory.Change) {
 	if ch.Event == nil {
 		return
 	}
+	at := time.Unix(0, ch.Event.TimeNano).UTC()
+	action := string(ch.Event.Action)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.events[ch.ID] = lastEvent{action: string(ch.Event.Action), at: time.Unix(0, ch.Event.TimeNano).UTC()}
+	re := e.events[ch.ID]
+	if re == nil || at.Sub(re.at) > time.Minute {
+		re = &recentEvents{} // a new sequence: older events are not related
+		e.events[ch.ID] = re
+	}
+	re.at = at
+	if n := len(re.actions); n == 0 || re.actions[n-1] != action {
+		re.actions = append(re.actions, action)
+		if len(re.actions) > maxRecent {
+			re.actions = re.actions[1:]
+		}
+	}
+	if ch.Event.Action == events.ActionDie {
+		if code, err := strconv.Atoi(ch.Event.Actor.Attributes["exitCode"]); err == nil {
+			re.exitCode = &code
+		}
+	}
 }
 
 // Run evaluates every Tick until ctx is cancelled.

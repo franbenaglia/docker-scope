@@ -382,9 +382,11 @@ func TestRestartsInWindow(t *testing.T) {
 	if len(x.open()) != 0 {
 		t.Fatal("2 reinicios no alcanzan el umbral de 3")
 	}
+	x.eng.Observe(inventory.Change{ID: "w1", Event: &events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano(),
+		Actor: events.Actor{Attributes: map[string]string{"exitCode": "3"}}}})
 	restart(130)
 	open := x.open()
-	if len(open) != 1 || !strings.Contains(open[0].Summary, "3 veces en 5m") {
+	if len(open) != 1 || !strings.Contains(open[0].Summary, "3 veces en 5m") || !strings.Contains(open[0].Cause, "último código de salida 3") {
 		t.Fatalf("incidente = %+v", open)
 	}
 	x.at(309) // window still holds 3
@@ -412,6 +414,8 @@ func TestNotRunning(t *testing.T) {
 		t.Fatal("los contenedores ya detenidos al arrancar no alertan")
 	}
 	x.eng.Observe(inventory.Change{ID: "a1", Event: &events.Message{Action: events.ActionKill, TimeNano: t0.UnixNano()}})
+	x.eng.Observe(inventory.Change{ID: "a1", Event: &events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano() + 1,
+		Actor: events.Actor{Attributes: map[string]string{"exitCode": "137"}}}})
 	x.set(exited(api, 137), old, other)
 	x.at(61)
 	x.at(66)
@@ -419,7 +423,7 @@ func TestNotRunning(t *testing.T) {
 	if len(open) != 1 || open[0].ContainerName != "api" {
 		t.Fatalf("incidente = %+v", open)
 	}
-	if !strings.Contains(open[0].Cause, "SIGKILL") || !strings.Contains(open[0].Cause, "kill") || !strings.Contains(open[0].Summary, "137") {
+	if !strings.Contains(open[0].Cause, "SIGKILL") || !strings.Contains(open[0].Cause, "kill → die") || !strings.Contains(open[0].Summary, "137") {
 		t.Errorf("causa/resumen = %q / %q", open[0].Cause, open[0].Summary)
 	}
 	x.set(api, old, other)
@@ -659,7 +663,7 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("dur(%s) = %q, want %q", d, got, want)
 		}
 	}
-	for code, want := range map[int]string{0: "código 0", 137: "SIGKILL", 143: "SIGTERM", 139: "señal 11", 127: "no encontrado", 1: "posible error de la aplicación"} {
+	for code, want := range map[int]string{0: "salida normal", 137: "SIGKILL", 143: "SIGTERM", 139: "señal 11", 127: "no encontrado", 1: "posible error de la aplicación"} {
 		if got := exitMeaning(code, false); !strings.Contains(got, want) {
 			t.Errorf("exitMeaning(%d) = %q", code, got)
 		}

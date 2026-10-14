@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapas 1–5 implementadas (config, docker, dockertest, inventory, collector, store, sse, demo, api, web). El resto de los paquetes son previstos.
+> Estado: etapas 1–6 implementadas (config, docker, dockertest, inventory, collector, store, sse, alerts, demo, api, web). Previsto: logs.
 
 ## Estructura de directorios (prevista)
 ```
@@ -54,6 +54,10 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
   `InsertSamples`, `UpsertContainers`, `Rollup`, `Prune`, `Series(SeriesQuery)`, `ContainerKnown`.
   `store.Writer`: un único goroutine de escritura, `EnqueueSamples(Round)` (vía `collector.OnRound`) y
   `EnqueueContainers` (vía `inventory.OnChange`); rollup cada minuto y prune cada hora. Ver ADR-011.
+- `alerts.Engine` ([internal/alerts](../internal/alerts/engine.go)): `Load` (reglas, mantenimiento, abiertos),
+  `Observe` (vía `inventory.OnChange`: eventos recientes y exitCode), `Run`/`Tick(now)`, `OnEvent(Event{opened|resolved|acked})`,
+  CRUD de reglas, `Ack`, `AddMaintenance`/`EndMaintenance`, `Pending`, `Status`. Persistencia: interfaz
+  `alerts.Store`, implementada por `store.Store` ([internal/store/alerts.go](../internal/store/alerts.go)). Ver ADR-013.
 - Config ([internal/config](../internal/config/config.go)): valores por defecto < JSON (`--config`) < flags.
   Ejemplo en [deploy/config.example.json](../deploy/config.example.json).
 - Frontend embebido: paquete `web` (`web.Dist()`), `//go:embed all:dist`. `web/dist/.gitkeep`
@@ -70,6 +74,16 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 | GET | `/api/containers/{id}` | `ContainerDetailDTO` | Sólo por ID completo (un prefijo da 404). ContainerDTO + image_id, labels, restart_max_retry, log_driver, tty, health_failing_streak, error. |
 | GET | `/api/stream` | SSE | Ver "Eventos SSE". |
 | GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
+| GET | `/api/rules` | {items: RuleDTO[]} | RuleDTO: id, name, kind, enabled, scope{container,project,service}, threshold, threshold_unit, for/window/cooldown/recover_seconds, hysteresis, created_at, updated_at. |
+| POST | `/api/rules` | 201 RuleDTO | Body RuleInput (JSON estricto, máx. 64 KiB). 400 `validation_error`/`invalid_json`. |
+| PUT | `/api/rules/{id}` | RuleDTO | Resuelve los abiertos de la regla ("regla modificada"). 404 si no existe. |
+| DELETE | `/api/rules/{id}` | 204 | Resuelve los abiertos ("regla eliminada"). |
+| GET | `/api/incidents` | {items, total, limit, offset} | `state` open\|resolved\|all, `container` (ID), `limit` 1–200 (50), `offset`. Más recientes primero. |
+| GET | `/api/incidents/pending` | {items: PendingDTO[]} | since, opens_at, in_cooldown, value. |
+| POST | `/api/incidents/{id}/ack` | IncidentDTO | Idempotente; no resuelve. |
+| GET | `/api/maintenance` | {items: MaintenanceDTO[]} | Activos. |
+| POST | `/api/maintenance` | 201 MaintenanceDTO | {container?: nombre, duration_seconds \| until, reason}. Máx. 30 días. |
+| DELETE | `/api/maintenance/{id}` | 204 | |
 | * | `/api/*` desconocida | 404 `not_found` | |
 
 `SummaryDTO.resources`: `cpu_cores_used` (núcleos), `host_cpus`, `mem_used_bytes`, `host_mem_bytes`,
@@ -96,6 +110,7 @@ Origin propio o `allowed_origins` + JSON, cabeceras CSP/nosniff/etc., nunca CORS
 | `metrics` | {at, items: {id: MetricsDTO}} | Tras cada ronda; un id ausente = sin muestra actual |
 | `heartbeat` | {t} | Cada 15 s |
 | `resync` | {reason} | Desborde de la cola del cliente: volver a pedir el snapshot |
+| `incident` | {type: opened\|resolved\|acked, incident: IncidentDTO} | Cambios de incidentes (seguido de `summary`) |
 
 Frontend: [web/src/lib/live.svelte.ts](../web/src/lib/live.svelte.ts).
 
@@ -106,4 +121,5 @@ Ver [internal/store/migrations](../internal/store/migrations/). Tiempos en ms Un
   net_rx/tx_bps, blk_read/write_bps, pids. Índice por ts.
 - `samples_1m(container_id, ts) PK`: n, cpu_avg/max, mem_avg/max, mem_limit, mem_pct_avg/max, tasas, pids_max.
 - `settings(key PK, value)`: p. ej. `rollup_1m_until`.
+- `rules`, `maintenance`, `incidents` (migración 002): índice único `(rule_id, container_id) WHERE state='open'`.
 - `schema_migrations(version PK, applied_at)`.

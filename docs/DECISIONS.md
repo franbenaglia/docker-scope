@@ -154,3 +154,34 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
 - `summary` se publica tras cada ronda y, con un debounce de 250 ms, tras cambios de contenedores o de conexión.
 - Orden de arranque: listeners registrados antes de lanzar inventario, colector y writer. Al apagar,
   `hub.Close()` antes de `http.Server.Shutdown`.
+
+## ADR-013 — Motor de alertas
+**Estado:** Aceptada (2026-10-14)
+**Decisión:**
+- Evaluación por tick (1 s) sobre el snapshot del inventario y las últimas métricas: idempotente y
+  testeable con reloj inyectado (`Engine.Tick(now)`). Con Docker desconectado o sin sincronizar no
+  se evalúa, así que los incidentes no se abren ni se resuelven con datos viejos.
+- Por cada (regla, contenedor por ID) hay una máquina de estados. Pendiente (sólo en memoria,
+  `GET /api/incidents/pending`) → abierta → resuelta (persistidas). Condición de 4 valores: alta,
+  banda (umbral − histéresis ≤ v ≤ umbral: cancela el pendiente pero no resuelve), despejada, y
+  desconocida (sin muestra: no hay transición).
+- `for` = duración mínima antes de abrir; `cooldown` = tiempo mínimo entre resolver y reabrir (el
+  pendiente indica `in_cooldown`); `recover_for` = tiempo despejado antes de resolver (contra el
+  flapping); `hysteresis` sólo para cpu y memory. Deduplicación: un abierto por par, también como índice
+  único en SQLite. Un fallo al escribir no deja el estado en memoria: se reintenta en el siguiente tick.
+- Unidades: cpu en % de un núcleo (como la UI); memory en % del límite efectivo (si no hay límite,
+  de la memoria del host, y el resumen del incidente lo dice); restarts = reinicios observados (ADR-008)
+  dentro de `window`. El contador previo al arranque del motor no cuenta.
+- not_running: exige alcance (nombre o proyecto). Sólo puede abrir si el agente vio el contenedor
+  en ejecución (los ya detenidos al arrancar no alertan). Pausado no cuenta. Las reglas siguen al
+  contenedor por nombre: si se elimina (aunque sea entre ticks: se mantiene un track inactivo) se abre;
+  si se recrea con otro ID y queda en ejecución se resuelve como "recreado".
+- Causa probable: código de salida (137/143/OOM/128+N/125–127…), State.Error, secuencia reciente de
+  eventos (p. ej. "kill → die") y `exitCode` del último `die`, siempre como posibilidad.
+- Mantenimiento global o por nombre, con vencimiento (máx. 30 días): se recolecta y evalúa igual, y
+  los incidentes que se abren se marcan `suppressed` (sin aviso). Reconocer (ack) no resuelve.
+- Editar una regla resuelve sus abiertos ("regla modificada") y reinicia los pendientes; borrarla o
+  deshabilitarla resuelve con el motivo correspondiente. El historial se conserva 90 días.
+- Reglas sembradas: unhealthy 30 s y restarts 3/5 min habilitadas, memory 80 % durante 60 s
+  habilitada, cpu 90 %/2 min deshabilitada (ejemplo). not_running no se siembra porque necesita alcance.
+- Limitación: el cooldown y los pendientes no sobreviven a un reinicio del agente (sí los abiertos).

@@ -145,7 +145,8 @@ func (w *Writer) maintain(ctx context.Context, prune bool) {
 		}
 		return
 	}
-	if res.Samples+res.Rollups+res.Containers > 0 {
-		w.s.log.Info("limpieza por retención", "muestras", res.Samples, "rollups", res.Rollups, "contenedores", res.Containers)
+	if res.Samples+res.Rollups+res.Containers+res.Incidents > 0 {
+		w.s.log.Info("limpieza por retención", "muestras", res.Samples, "rollups", res.Rollups,
+			"contenedores", res.Containers, "incidentes", res.Incidents)
 	}
 }

@@ -3,14 +3,15 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 6 — Motor de alertas
-- **Último paso completado:** Migración 002 (rules con 4 reglas sembradas, maintenance, incidents con
-  índice único de abiertos) y paquete `internal/alerts` (modelo, validación, motor evaluado por tick
-  con reloj inyectable, causas probables, CRUD de reglas, ack, mantenimiento) con 17 tests en verde.
-  El store SQLite todavía NO implementa `alerts.Store` y el motor no está conectado.
-- **Próximo paso:** Implementar `alerts.Store` en `internal/store/alerts.go` (+ tests y retención de
-  incidentes), conectar el motor en main (Load, Observe, Run), endpoints REST (rules, incidents, ack,
-  pending, maintenance), evento SSE `incident`, contadores en summary y ADR-013.
+- **Etapa:** 7 — Logs
+- **Último paso completado:** Etapa 6 cerrada. Motor de alertas conectado (Load, Observe, Run cada 1 s),
+  persistido en SQLite (migración 002, retención de incidentes de 90 días), API de rules, incidents,
+  pending, ack y maintenance, evento SSE `incident`, `summary.alerts`, tarjeta de incidentes y aviso de
+  mantenimiento en el panel.
+- **Próximo paso:** Etapa 7: `docker.API.ContainerLogs` (+ fake), paquete `internal/logs` (demux con
+  `stdcopy` vs TTY, líneas con un tamaño máximo, buffers acotados, sanitizado), endpoint
+  `GET /api/containers/{id}/logs` (tail) y stream SSE de logs separado, con cancelación. Revisar
+  `stdcopy` en `github.com/moby/moby/api/pkg/stdcopy` con go doc.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -35,6 +36,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 6 | Motor de alertas (tick 1s, pendiente en memoria, abierta/resuelta persistidas, histéresis, cooldown, recover_for, mantenimiento con supresión, causas probables por códigos y eventos), API y SSE. Verificado contra Docker real con contenedores dsp-*. Corregido: dur() y los contenedores eliminados entre ticks (tracks inactivos). |
 | 2026-10-14 | 5 | Seguridad HTTP (Host/Origin/CSP), detalle/filtros/paginación, hub SSE + /api/stream, panel en vivo. Desvío: el commit b5b413a salió sin PROGRESS ni el middleware conectado (corregido en 271c32f). Corregida una carrera: los listeners se registraban después de arrancar las goroutines. |
 | 2026-10-14 | 4 | Store SQLite (migraciones, crudas + rollup 1m, retención, writer con cola acotada), endpoint de series. Bug corregido: los lotes desencolados durante el apagado se perdían por usar el contexto cancelado. Verificado contra Docker real reiniciando el agente. |
 | 2026-10-14 | 3 | Colector de métricas + Info del host; métricas en la API y el panel; demo con stats sintéticas. Contrastado con `docker stats` real (contenedores dsp-*). |

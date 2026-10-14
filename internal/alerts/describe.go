@@ -24,8 +24,11 @@ func (e *Engine) describe(r Rule, c *inventory.Container, val *float64, latest m
 		return s + ")", e.exitCause(c)
 	case Unhealthy:
 		s := fmt.Sprintf("%s está unhealthy desde hace al menos %s", c.Name, dur(r.For))
-		if c.HealthFailingStreak > 0 {
-			s += fmt.Sprintf(" (%d chequeos fallidos seguidos)", c.HealthFailingStreak)
+		switch n := c.HealthFailingStreak; {
+		case n == 1:
+			s += " (1 chequeo fallido)"
+		case n > 1:
+			s += fmt.Sprintf(" (%d chequeos fallidos seguidos)", n)
 		}
 		return s, "el healthcheck definido en la imagen o en Compose está fallando"
 	case Restarts:
@@ -35,8 +38,15 @@ func (e *Engine) describe(r Rule, c *inventory.Container, val *float64, latest m
 		}
 		s := fmt.Sprintf("%s se reinició %.0f veces en %s (umbral %.0f)", c.Name, n, dur(r.Window), r.Threshold)
 		cause := "reinicios observados por el agente (política de reinicio o manuales)"
-		if c.ExitCode != nil {
-			cause += fmt.Sprintf("; último código de salida conocido %d: %s", *c.ExitCode, exitMeaning(*c.ExitCode, c.OOMKilled))
+		code := c.ExitCode
+		if re := e.events[c.ID]; code == nil && re != nil {
+			code = re.exitCode // running again: the code comes from the last "die" event
+		}
+		if code != nil {
+			cause += fmt.Sprintf("; último código de salida %s", exitMeaning(*code, c.OOMKilled))
+		}
+		if c.RestartPolicy != "" && c.RestartPolicy != "no" {
+			cause += "; política de reinicio: " + c.RestartPolicy
 		}
 		return s, cause
 	case CPU:
@@ -60,13 +70,13 @@ func (e *Engine) describe(r Rule, c *inventory.Container, val *float64, latest m
 func (e *Engine) exitCause(c *inventory.Container) string {
 	var parts []string
 	if c.ExitCode != nil {
-		parts = append(parts, exitMeaning(*c.ExitCode, c.OOMKilled))
+		parts = append(parts, "código de salida "+exitMeaning(*c.ExitCode, c.OOMKilled))
 	}
 	if c.Error != "" {
 		parts = append(parts, "error informado por Docker: "+c.Error)
 	}
-	if ev, ok := e.events[c.ID]; ok {
-		parts = append(parts, fmt.Sprintf("último evento de Docker: %s (%s)", ev.action, ev.at.Format(time.RFC3339)))
+	if re := e.events[c.ID]; re != nil {
+		parts = append(parts, fmt.Sprintf("eventos de Docker: %s (%s)", strings.Join(re.actions, " → "), re.at.Format(time.RFC3339)))
 	}
 	if c.State == container.StateRestarting {
 		parts = append(parts, "Docker lo está reiniciando según su política")
@@ -78,8 +88,9 @@ func (e *Engine) exitCause(c *inventory.Container) string {
 }
 
 func (e *Engine) removedCause(id string) string {
-	if ev, ok := e.events[id]; ok {
-		return fmt.Sprintf("el contenedor fue eliminado (último evento de Docker: %s); posible docker rm, recreación o docker compose down", ev.action)
+	if re := e.events[id]; re != nil {
+		return fmt.Sprintf("el contenedor fue eliminado (eventos de Docker: %s); posible docker rm, recreación o docker compose down",
+			strings.Join(re.actions, " → "))
 	}
 	return "el contenedor fue eliminado; posible docker rm, recreación o docker compose down"
 }
@@ -90,19 +101,19 @@ func exitMeaning(code int, oom bool) string {
 	case oom:
 		return "Docker indica OOMKilled: posiblemente el kernel lo terminó por falta de memoria"
 	case code == 0:
-		return "salida normal (código 0): posiblemente terminó su tarea o se detuvo de forma ordenada"
+		return "0: salida normal, posiblemente terminó su tarea o se detuvo de forma ordenada"
 	case code == 137:
-		return "código 137 (SIGKILL): posible docker kill, docker stop que agotó el tiempo, o el kernel por memoria"
+		return "137 (SIGKILL): posible docker kill, docker stop que agotó el tiempo, o el kernel por memoria"
 	case code == 143:
-		return "código 143 (SIGTERM): posible docker stop o apagado ordenado"
+		return "143 (SIGTERM): posible docker stop o apagado ordenado"
 	case code == 130:
-		return "código 130 (SIGINT): posible interrupción"
+		return "130 (SIGINT): posible interrupción"
 	case code > 128 && code < 160:
-		return fmt.Sprintf("código %d: posiblemente terminado por la señal %d", code, code-128)
+		return fmt.Sprintf("%d: posiblemente terminado por la señal %d", code, code-128)
 	case code == 125 || code == 126 || code == 127:
-		return fmt.Sprintf("código %d: posible error al iniciar el comando (Docker o binario no encontrado/no ejecutable)", code)
+		return fmt.Sprintf("%d: posible error al iniciar el comando (Docker o binario no encontrado/no ejecutable)", code)
 	default:
-		return fmt.Sprintf("código %d: posible error de la aplicación", code)
+		return fmt.Sprintf("%d: posible error de la aplicación", code)
 	}
 }
 

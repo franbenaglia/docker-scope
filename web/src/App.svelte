@@ -78,6 +78,18 @@
       </div>
     {/if}
 
+    {#if summary.alerts && summary.alerts.maintenance.length > 0}
+      <div class="banner info" role="status">
+        Mantenimiento activo:
+        {#each summary.alerts.maintenance as m, i (m.id)}
+          {i > 0 ? ' · ' : ''}{m.global ? 'global' : m.container} hasta las {fmtTime(m.until)}{m.reason
+            ? ` (${m.reason})`
+            : ''}
+        {/each}
+        — se sigue recolectando, pero los avisos se suprimen.
+      </div>
+    {/if}
+
     <section class="cards" class:stale={summary.stale || agentLost} aria-label="Resumen">
       {#if summary.containers}
         {@const c = summary.containers}
@@ -93,6 +105,16 @@
           <div class="card"><span class="n warn">{c.restarting}</span><span>Reiniciando</span></div>
         {/if}
         <div class="card"><span class="n muted">{c.total}</span><span>Total</span></div>
+        {#if summary.alerts}
+          {@const a = summary.alerts}
+          <div class="card" title="Incidentes abiertos; reconocer un incidente no lo resuelve">
+            <span class="n" class:bad={a.open > 0}>{a.open}</span>
+            <span>Incidentes abiertos</span>
+            <span class="muted small">
+              {a.unacked} sin reconocer{a.pending > 0 ? ` · ${a.pending} pendientes` : ''}
+            </span>
+          </div>
+        {/if}
       {:else}
         <div class="card"><span class="n muted">—</span><span>Contenedores (sin datos)</span></div>
       {/if}
@@ -274,6 +296,10 @@
   .banner.bad {
     border-color: var(--bad);
     color: var(--bad);
+  }
+  .banner.info {
+    border-color: var(--info);
+    color: var(--info);
   }
   .banner.warn {
     border-color: var(--warn);

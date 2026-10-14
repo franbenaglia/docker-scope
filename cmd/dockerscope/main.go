@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/franbenaglia/docker-scope/internal/alerts"
 	"github.com/franbenaglia/docker-scope/internal/api"
 	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/config"
@@ -80,6 +81,11 @@ func run() error {
 	})
 	col.OnRound(writer.EnqueueSamples)
 
+	engine := alerts.New(st, inv, col, alerts.Options{Log: log.With("comp", "alerts")})
+	if err := engine.Load(ctx); err != nil {
+		return err
+	}
+	inv.OnChange(engine.Observe)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -89,16 +95,18 @@ func run() error {
 
 	hub := sse.NewHub(sse.Options{})
 	apiSrv := &api.Server{
-		Inventory: inv, Metrics: col, History: st, Retention: retention, Hub: hub,
+		Inventory: inv, Metrics: col, History: st, Retention: retention, Hub: hub, Alerts: engine,
 		HeartbeatSeconds: 15, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
 	}
 	apiSrv.Attach(inv, col)
+	apiSrv.AttachAlerts(engine)
 
 	// Start the background components only after every listener is registered.
 	var wg sync.WaitGroup
 	wg.Go(func() { _ = writer.Run(ctx) })
 	wg.Go(func() { _ = inv.Run(ctx) })
 	wg.Go(func() { _ = col.Run(ctx) })
+	wg.Go(func() { _ = engine.Run(ctx) })
 	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
 	sec := api.Security{ListenPort: listenPort, ExtraHosts: []string{listenHost}, AllowedOrigins: cfg.AllowedOrigins}
 	srv := &http.Server{

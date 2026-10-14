@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/franbenaglia/docker-scope/internal/alerts"
 	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
 )
@@ -20,6 +21,7 @@ const (
 	EvMetrics          = "metrics"           // MetricsBatchDTO, after each collector round
 	EvHeartbeat        = "heartbeat"         // {"t": RFC 3339}, every 15s
 	EvResync           = "resync"            // {"reason": "..."}: refetch the REST snapshot
+	EvIncident         = "incident"          // IncidentEventDTO: opened, resolved or acked
 )
 
 // HelloDTO opens a stream.
@@ -85,7 +87,23 @@ func (s *Server) Attach(inv EventSources, col RoundSource) {
 	})
 }
 
+// IncidentSource is the alert engine's event registration.
+type IncidentSource interface {
+	OnEvent(func(alerts.Event))
+}
+
+// AttachAlerts publishes incident events. Call before the engine runs.
+func (s *Server) AttachAlerts(src IncidentSource) {
+	src.OnEvent(func(ev alerts.Event) {
+		s.publish(EvIncident, IncidentEventDTO{Type: string(ev.Type), Incident: incidentDTO(ev.Incident)})
+		s.publish(EvSummary, s.summary())
+	})
+}
+
 func (s *Server) publish(event string, v any) {
+	if s.Hub == nil {
+		return
+	}
 	b, err := json.Marshal(v) // compact: a single line, as SSE data requires
 	if err != nil {
 		s.Log.Error("codificar evento SSE", "evento", event, "err", err)
