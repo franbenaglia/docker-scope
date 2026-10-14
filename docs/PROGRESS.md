@@ -4,13 +4,13 @@
 
 ## Estado actual
 - **Etapa:** 6 — Motor de alertas
-- **Último paso completado:** Etapa 5 cerrada. Seguridad HTTP, detalle/filtros/paginación, hub SSE
-  y `/api/stream`; el panel funciona en vivo (snapshot + eventos, `resync`, watchdog de heartbeat,
-  reconexión) y el uptime avanza en el cliente.
-- **Próximo paso:** Diseñar `internal/alerts` (máquina de estados pending→open→resolved, duración
-  mínima, cooldown, histéresis, dedup, mantenimiento) con un reloj inyectable, alimentado por
-  `inventory.OnChange` y `collector.OnRound`. Migración 002 (incidents, rules, maintenance). Empezar por
-  los tests del motor (lista de casos en PLAN etapa 6) antes de la persistencia y la API.
+- **Último paso completado:** Migración 002 (rules con 4 reglas sembradas, maintenance, incidents con
+  índice único de abiertos) y paquete `internal/alerts` (modelo, validación, motor evaluado por tick
+  con reloj inyectable, causas probables, CRUD de reglas, ack, mantenimiento) con 17 tests en verde.
+  El store SQLite todavía NO implementa `alerts.Store` y el motor no está conectado.
+- **Próximo paso:** Implementar `alerts.Store` en `internal/store/alerts.go` (+ tests y retención de
+  incidentes), conectar el motor en main (Load, Observe, Run), endpoints REST (rules, incidents, ack,
+  pending, maintenance), evento SSE `incident`, contadores en summary y ADR-013.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
