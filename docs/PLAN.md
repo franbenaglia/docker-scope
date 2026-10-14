@@ -139,11 +139,13 @@ _Cerrada: verificado en el navegador (demo y Docker real): ack, regla inválida/
 _Cerrada: escenario verificado en tiempo real (abren y se resuelven los 4 tipos de incidente) y con tests acelerados._
 
 ## Etapa 11 — Distribución y documentación
-- [ ] `deploy/test-compose/`: servicio normal, con HEALTHCHECK, fallo/reinicio controlado
-- [ ] Unidad systemd de ejemplo
-- [ ] Config de ejemplo
-- [ ] README completo (requisitos, instalación, permisos del socket, rootless, túnel SSH,
+- [x] `deploy/test-compose/`: servicio normal, con HEALTHCHECK, fallo/reinicio controlado
+- [x] Unidad systemd de ejemplo
+- [x] Config de ejemplo
+- [x] README completo (requisitos, instalación, permisos del socket, rootless, túnel SSH,
       retención, fórmulas de métricas, limitaciones)
+
+_Cerrada: Compose y scenario.sh verificados contra Docker real; unidad validada con `systemd-analyze verify` (no instalada: requiere root)._
 
 ## Etapa 12 — Verificación final
 - [ ] `make check` limpio

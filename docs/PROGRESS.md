@@ -3,13 +3,14 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 11 — Distribución y documentación
-- **Último paso completado:** `deploy/test-compose/` (web nginx, health con HEALTHCHECK controlable,
-  flaky con fallo controlado y `on-failure:5`; `scenario.sh` up|down|unhealthy|healthy|crash|fix|stop-web|
-  start-web|status, sólo el proyecto dockerscope-test; verificado contra Docker real) y la unidad systemd
-  de ejemplo (`deploy/systemd/dockerscope.service`, con hardening; `systemd-analyze verify` sin errores, no
-  instalada). Targets `make test-env-up/down`.
-- **Próximo paso:** README.md completo (ver la lista en PLAN etapa 11) y cerrar la etapa.
+- **Etapa:** 12 — Verificación final
+- **Último paso completado:** Etapa 11 cerrada. Compose de prueba + `scenario.sh`, unidad systemd con
+  hardening, `make test-env-up/down` y README completo (requisitos, compilación, configuración, permisos del
+  socket y rootless, systemd, túnel SSH, retención, fórmulas, alertas, logs, demo, Compose, seguridad,
+  limitaciones, desarrollo).
+- **Próximo paso:** Etapa 12: `make check` limpio; recorrido E2E en el navegador con el Compose de prueba
+  (panel → contenedor → métricas → logs → fallo controlado → incidente → recuperación); desconexión y
+  reconexión de Docker (proxy socat) y cancelación de streams; resumen final en PROGRESS.md.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -38,6 +39,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 11 | Compose de prueba con escenarios controlados, unidad systemd con hardening, README completo. Corregido en la revisión: /etc/dockerscope debía pertenecer al grupo dockerscope. |
 | 2026-10-14 | 10 | Demo dinámico (4 tipos de incidente en un ciclo de 4 min) y endurecimiento (MaxHeaderBytes, auditoría de logs, govulncheck/npm audit, CSP). |
 | 2026-10-14 | 9 | Visor de logs, vistas de incidentes/reglas/mantenimiento, navegación, notificaciones opt-in. Bug corregido: mutaciones sin cuerpo → 415 (el cliente ahora siempre envía JSON). Render seguro verificado con logs reales maliciosos. |
 | 2026-10-14 | 8 | Panel: componentes, router por hash, tabla (filtros, orden, agrupación Compose), detalle con gráficos Chart.js (eje X fijado al rango), reloj compartido, estilos globales. Verificado en demo, escritorio y móvil. |

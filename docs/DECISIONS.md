@@ -266,3 +266,19 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
 host: cualquiera puede abrir el panel y leer metadatos, etiquetas y logs de los contenedores sin pertenecer al
 grupo docker. SPEC no pide autenticación local. Se documenta en el README (usar en hosts de un solo
 usuario o confiables) y queda como mejora posible (socket unix con permisos o token).
+
+## ADR-018 — Distribución: Compose de prueba y systemd
+**Estado:** Aceptada (2026-10-14)
+**Decisión:**
+- `deploy/test-compose` (proyecto `dockerscope-test`, imágenes fijadas nginx:1.27-alpine y busybox:1.37):
+  `web` normal; `health` con un HEALTHCHECK que depende de /tmp/healthy (se rompe con `scenario.sh
+  unhealthy`); `flaky` con `restart: on-failure:5`, que sale con código 3 mientras exista `state/crash` (bind
+  mount, en .gitignore). Es un bucle de reinicios real de Docker, sin docker kill (que Docker trata como
+  detención manual). `scenario.sh` sólo opera sobre `docker compose -f` de ese proyecto.
+- systemd: usuario dedicado + `SupplementaryGroups=docker`, `StateDirectory` 0700 y `UMask=0077`.
+  Hardening: ProtectSystem=strict (connect() al socket funciona en sólo lectura), sin capabilities,
+  `IPAddressAllow=localhost`, `SystemCallFilter=@system-service ~@privileged`. No se excluye `@resources`
+  porque Go llama a setrlimit al iniciar y el filtro (SIGSYS) mataría el proceso. Sin `Wants=docker.service`
+  para no arrancar Docker por cuenta del monitor.
+- No se publica una imagen de contenedor: correr el monitor dentro de Docker exige montar el socket y
+  `:ro` no lo protege (README).

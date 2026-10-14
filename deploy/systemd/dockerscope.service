@@ -3,7 +3,7 @@
 # Requisitos previos (como root):
 #   useradd --system --no-create-home --shell /usr/sbin/nologin dockerscope
 #   install -m 0755 bin/dockerscope /usr/local/bin/dockerscope
-#   install -d -m 0750 /etc/dockerscope
+#   install -d -m 0750 -g dockerscope /etc/dockerscope
 #   install -m 0640 -g dockerscope deploy/config.example.json /etc/dockerscope/config.json
 #
 # Seguridad: el grupo "docker" da acceso al socket de Docker, que equivale a

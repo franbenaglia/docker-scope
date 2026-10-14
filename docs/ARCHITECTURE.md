@@ -23,7 +23,7 @@ web/                    Svelte + TS + Vite (build → web/dist, embebido)
   src/components/       StatusBanners, SummaryCards, ContainerTable, ContainerDetail, MetricChart,
                         LogViewer, IncidentsView, RulesView, MaintenanceView
   Rutas (hash):         #/  #/c/<id>  #/incidents  #/rules  #/maintenance
-deploy/                 systemd, compose de prueba, config de ejemplo
+deploy/                 config.example.json, systemd/dockerscope.service, test-compose/ (compose.yaml + scenario.sh)
 ```
 
 ## Flujo de datos
