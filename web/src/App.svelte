@@ -130,7 +130,7 @@
                 <td>
                   <span class="state {c.state}">{c.state}</span>
                   {#if c.uptime_seconds !== null}
-                    <div class="muted small">hace {fmtDuration(c.uptime_seconds)}</div>
+                    <div class="muted small">activo {fmtDuration(c.uptime_seconds)}</div>
                   {:else if c.exit_code !== null}
                     <div class="muted small">código {c.exit_code}{c.oom_killed ? ' · OOM' : ''}</div>
                   {/if}

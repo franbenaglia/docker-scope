@@ -7,6 +7,7 @@
 package demo
 
 import (
+	"strings"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -18,8 +19,8 @@ import (
 // New returns a simulated daemon populated with demo containers.
 func New(now time.Time) docker.API {
 	id := func(n byte) string {
-		b := []byte("de0000000000000000000000000000000000000000000000000000000000000")
-		return string(append(b, '0'+n))
+		// Distinct 12-char prefixes so short IDs differ, as with real Docker.
+		return strings.Repeat(string('0'+n), 4) + "dem0" + strings.Repeat("0", 55) + string('0'+n)
 	}
 	return dt.New(
 		dt.Container(id(1), "demo-web-1", now.Add(-3*time.Hour), dt.Compose("demo", "web"),
