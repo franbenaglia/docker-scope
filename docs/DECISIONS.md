@@ -243,3 +243,26 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
   con cola acotada, búsqueda con resaltado por segmentos de texto (nunca `{@html}`), autoscroll que se
   desactiva al subir. Tras un `end` se cierra el EventSource para que no reconecte solo y repita el tail.
   Si se reconecta por error de red, se descartan las líneas con timestamp ≤ al último visto.
+
+## ADR-017 — Escenario del demo y endurecimiento del servidor
+**Estado:** Aceptada (2026-10-14)
+**Decisión (demo):**
+- `demo.Demo` envuelve `dockertest.Fake` y reproduce en bucle un escenario de 4 min:
+  0:20 demo-api-1 healthy (resuelve el unhealthy inicial); 0:30–1:00 demo-cache-1 en bucle de
+  reinicios (4 AutoRestart); 1:00–2:30 pico de memoria de demo-api-1 al 90 % de 512 MiB; 1:30 demo-worker-1
+  muere (137) y 2:10 vuelve; 2:40 demo-api-1 unhealthy otra vez. Así se ven los 4 tipos de incidente
+  abrirse y resolverse.
+- La regla "Demo: servicio detenido" (not_running, demo/worker, 10 s) se crea sólo si falta, y sólo en
+  `dockerscope-demo.db`. El estado de ejecución que consultan los logs sintéticos sale del fake.
+- El escenario tiene un factor de escala de tiempo (tests: un ciclo ≈ 48 ms).
+**Decisión (servidor):**
+- `MaxHeaderBytes` 64 KiB, `ReadHeaderTimeout` 5 s, `IdleTimeout` 60 s. Sin `ReadTimeout` ni
+  `WriteTimeout`: en net/http un ReadTimeout que vence durante el handler cancela el contexto de la petición
+  y cortaría los SSE. Los cuerpos están limitados a 64 KiB y cada escritura SSE tiene su propio deadline.
+- Los logs del agente sólo registran IDs cortos, nombres, contadores y errores; nunca `Config.Env` (no
+  se lee), etiquetas ni contenido de logs.
+- Se auditó con govulncheck y npm audit (sin hallazgos) y se comprobó que la CSP no produce violaciones.
+**Riesgo aceptado:** escuchar en loopback protege de la red, pero no de otros usuarios locales del mismo
+host: cualquiera puede abrir el panel y leer metadatos, etiquetas y logs de los contenedores sin pertenecer al
+grupo docker. SPEC no pide autenticación local. Se documenta en el README (usar en hosts de un solo
+usuario o confiables) y queda como mejora posible (socket unix con permisos o token).

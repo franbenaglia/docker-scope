@@ -7,6 +7,7 @@
 package demo
 
 import (
+	"context"
 	"hash/fnv"
 	"math"
 	"strings"
@@ -19,8 +20,17 @@ import (
 	dt "github.com/franbenaglia/docker-scope/internal/docker/dockertest"
 )
 
-// New returns a simulated daemon populated with demo containers.
-func New(now time.Time) docker.API {
+// Demo is a simulated daemon with demo containers and a scripted scenario.
+type Demo struct {
+	*dt.Fake
+	stats *stats
+	ids   map[string]string // container name → ID
+	scale float64           // scenario time scale (1 = real time)
+}
+
+// New returns a simulated daemon populated with demo containers. Call Run to
+// play the scenario (failures, restarts, health changes, a memory spike).
+func New(now time.Time) *Demo {
 	id := func(n byte) string {
 		// Distinct 12-char prefixes so short IDs differ, as with real Docker.
 		return strings.Repeat(string('0'+n), 4) + "dem0" + strings.Repeat("0", 55) + string('0'+n)
@@ -35,12 +45,23 @@ func New(now time.Time) docker.API {
 		dt.Container(id(4), "demo-migrate-1", now.Add(-26*time.Hour), dt.Compose("demo", "migrate"),
 			dt.Exited(0, now.Add(-26*time.Hour+40*time.Second))),
 		dt.Container(id(5), "scratch", now.Add(-2*time.Hour), dt.Exited(137, now.Add(-time.Hour))),
+		dt.Container(id(6), "demo-cache-1", now.Add(-5*time.Hour), dt.Compose("demo", "cache"),
+			dt.Restart(container.RestartPolicyAlways)),
 	)
-	st := newStats(now, dt.FakeHost)
-	st.memLimit[id(2)] = 512 << 20
-	f.StatsFunc = st.next
-	f.LogsFunc = logs(func(cid string) bool { return cid != id(4) && cid != id(5) }) // 4 and 5 are exited
-	return f
+	d := &Demo{Fake: f, stats: newStats(now, dt.FakeHost), scale: 1, ids: map[string]string{}}
+	for i, name := range []string{"demo-web-1", "demo-api-1", "demo-worker-1", "demo-migrate-1", "scratch", "demo-cache-1"} {
+		d.ids[name] = id(byte(i + 1))
+	}
+	d.stats.memLimit[d.ids["demo-api-1"]] = 512 << 20
+	f.StatsFunc = d.stats.next
+	f.LogsFunc = logs(d.running)
+	return d
+}
+
+// running reports whether the simulated container is running now.
+func (d *Demo) running(id string) bool {
+	c, err := d.Fake.InspectContainer(context.Background(), id)
+	return err == nil && c.State != nil && c.State.Running
 }
 
 // stats generates cumulative counters that evolve smoothly over time, with a
@@ -52,6 +73,8 @@ type stats struct {
 	ctrs  map[string]*counters
 	// memLimit mirrors HostConfig.Memory: the cgroup limit Docker reports.
 	memLimit map[string]uint64
+	// spike forces memory to 90% of the limit (scenario).
+	spike map[string]bool
 }
 
 type counters struct {
@@ -62,7 +85,7 @@ type counters struct {
 }
 
 func newStats(start time.Time, host docker.HostInfo) *stats {
-	return &stats{start: start, host: host, ctrs: map[string]*counters{}, memLimit: map[string]uint64{}}
+	return &stats{start: start, host: host, ctrs: map[string]*counters{}, memLimit: map[string]uint64{}, spike: map[string]bool{}}
 }
 
 func (s *stats) next(id string, now time.Time) container.StatsResponse {
@@ -90,6 +113,9 @@ func (s *stats) next(id string, now time.Time) container.StatsResponse {
 	limit := uint64(s.host.MemTotal)
 	if l, ok := s.memLimit[id]; ok {
 		limit = l
+	}
+	if s.spike[id] {
+		mem = 0.9 * float64(limit)
 	}
 
 	ncpu := uint32(s.host.NCPU)

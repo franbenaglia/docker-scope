@@ -131,8 +131,12 @@ _Cerrada: verificado en modo demo (escritorio y 390 px de ancho, sin scroll hori
 _Cerrada: verificado en el navegador (demo y Docker real): ack, regla inválida/válida, mantenimiento iniciar/finalizar, visor de logs (seguir, buscar, pausar), render seguro de HTML/OSC. Las notificaciones del navegador no se probaron de forma interactiva (requieren conceder el permiso)._
 
 ## Etapa 10 — Modo demo y endurecimiento
-- [ ] `--demo` con fake Docker y datos simulados, base de datos separada, banner visible
-- [ ] Revisión de seguridad: 127.0.0.1, sin listen externo (ADR-004), no registrar secretos
+- [x] `--demo` con fake Docker y datos simulados, base de datos separada, banner visible
+- [x] Escenario dinámico del demo (ciclo de 4 min: unhealthy/recuperación, bucle de reinicios, pico de memoria, worker detenido) + regla propia sólo en la BD del demo
+- [x] Revisión de seguridad: 127.0.0.1, sin listen externo (ADR-004), no registrar secretos
+- [x] Límites del servidor HTTP (MaxHeaderBytes; sin ReadTimeout por SSE), govulncheck y npm audit sin hallazgos, CSP sin violaciones
+
+_Cerrada: escenario verificado en tiempo real (abren y se resuelven los 4 tipos de incidente) y con tests acelerados._
 
 ## Etapa 11 — Distribución y documentación
 - [ ] `deploy/test-compose/`: servicio normal, con HEALTHCHECK, fallo/reinicio controlado

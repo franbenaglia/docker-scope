@@ -3,14 +3,15 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 10 — Modo demo y endurecimiento
-- **Último paso completado:** Etapa 9 cerrada. Vistas `#/incidents` (pendientes, historial, ack,
-  notificaciones opt-in), `#/rules` (CRUD con validación del servidor), `#/maintenance` y navegación
-  con contadores. Visor de logs en el detalle. Bug corregido: las mutaciones sin cuerpo (ack, DELETE)
-  salían sin Content-Type y el middleware las rechazaba con 415; ahora el cliente envía siempre `{}` JSON.
-- **Próximo paso:** Etapa 10: escenario dinámico del demo (fallos, reinicios, cambios de salud para ver
-  incidentes y recuperaciones) y revisión de seguridad: solo 127.0.0.1 (ADR-004), no registrar secretos
-  (revisar los logs del agente: errores de Docker, labels), permisos y límites. Leer la etapa 10 en PLAN.md.
+- **Etapa:** 11 — Distribución y documentación
+- **Último paso completado:** Etapa 10 cerrada. Demo dinámico (`demo.Demo.Run`, escenario de 4 min
+  con un factor de escala testeable; regla "Demo: servicio detenido" sólo en la BD del demo) y revisión
+  de seguridad (logs sin secretos, `MaxHeaderBytes`, sin ReadTimeout por SSE, govulncheck y npm audit
+  limpios, CSP sin violaciones). Riesgo documentado: otros usuarios locales del host pueden usar el panel.
+- **Próximo paso:** Etapa 11: `deploy/test-compose/` (servicio normal, con HEALTHCHECK, fallo/reinicio
+  controlado), unidad systemd de ejemplo (usuario dedicado, grupo docker, data dir 0700, hardening),
+  y el README completo (requisitos, instalación, permisos del socket y rootless, túnel SSH, retención,
+  fórmulas de métricas, limitaciones, incluido el riesgo multiusuario de ADR-017).
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -21,6 +22,8 @@
 _(lo que no pudo probarse y por qué)_
 - Etapa 1: `make dev` (agente + Vite en paralelo) no se probó de forma interactiva; `make check` y
   el binario sí.
+- Etapa 10 (posible mejora fuera de SPEC): en hosts multiusuario, cualquier usuario local puede abrir el
+  panel. Opciones futuras: escuchar en un socket unix con permisos (accesible por `ssh -L`) o un token local.
 - Etapa 9: notificaciones del navegador no probadas de forma interactiva (el navegador headless no concede el permiso).
 - Etapa 5: `make dev` (Vite + -allow-origin) sigue sin probarse de forma interactiva.
 - Etapa 2: no se probó un `systemctl restart docker` real (requiere la autorización del usuario). Sí se
@@ -36,6 +39,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 10 | Demo dinámico (4 tipos de incidente en un ciclo de 4 min) y endurecimiento (MaxHeaderBytes, auditoría de logs, govulncheck/npm audit, CSP). |
 | 2026-10-14 | 9 | Visor de logs, vistas de incidentes/reglas/mantenimiento, navegación, notificaciones opt-in. Bug corregido: mutaciones sin cuerpo → 415 (el cliente ahora siempre envía JSON). Render seguro verificado con logs reales maliciosos. |
 | 2026-10-14 | 8 | Panel: componentes, router por hash, tabla (filtros, orden, agrupación Compose), detalle con gráficos Chart.js (eje X fijado al rango), reloj compartido, estilos globales. Verificado en demo, escritorio y móvil. |
 | 2026-10-14 | 7 | Logs: parser (frames/TTY/timestamps), sanitizado, buffer acotado, REST tail + SSE follow con límite de streams, demo. Bug corregido: el truncado contaba dos veces. Verificado contra Docker real. |

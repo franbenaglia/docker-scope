@@ -46,10 +46,12 @@ func run() error {
 	defer stop()
 
 	var src docker.API
+	var dem *demo.Demo
 	mode := "docker"
 	if cfg.Demo {
 		mode = "demo"
-		src = demo.New(time.Now())
+		dem = demo.New(time.Now())
+		src = dem
 		log.Warn("MODO DEMO: datos simulados, sin conexión a Docker")
 	} else {
 		cli, err := docker.New(cfg.DockerHost)
@@ -86,6 +88,9 @@ func run() error {
 		return err
 	}
 	inv.OnChange(engine.Observe)
+	if dem != nil {
+		demo.EnsureRules(ctx, engine, log)
+	}
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -107,13 +112,20 @@ func run() error {
 	wg.Go(func() { _ = inv.Run(ctx) })
 	wg.Go(func() { _ = col.Run(ctx) })
 	wg.Go(func() { _ = engine.Run(ctx) })
+	if dem != nil {
+		wg.Go(func() { _ = dem.Run(ctx) })
+	}
 	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
 	sec := api.Security{ListenPort: listenPort, ExtraHosts: []string{listenHost}, AllowedOrigins: cfg.AllowedOrigins}
 	srv := &http.Server{
 		Handler:           sec.Middleware(apiSrv.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
-		// No WriteTimeout: SSE streams are long-lived; the hub sets a deadline per write.
+		MaxHeaderBytes:    64 << 10,
+		// No ReadTimeout/WriteTimeout: SSE streams are long-lived. A ReadTimeout
+		// firing mid-request makes net/http cancel the request context, which
+		// would cut streams. Bodies are capped (64 KiB) and SSE writes have a
+		// per-write deadline instead (ADR-017).
 	}
 	log.Info("panel disponible", "url", "http://"+ln.Addr().String(), "modo", mode)
 
