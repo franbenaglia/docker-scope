@@ -67,14 +67,13 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 |---|---|---|---|
 | GET | `/api/summary` | `SummaryDTO` | `daemon` {status connecting\|connected\|disconnected, since, last_error, attempts}; `synced`/`stale`/`as_of`; `containers` es `null` hasta la primera sincronización (desconocido ≠ 0). `unhealthy` cuenta sólo los que están en ejecución. |
 | GET | `/api/containers` | `ContainerListDTO` | `synced`/`stale`/`as_of` + `items[]` ordenados por nombre. Las fechas van en UTC o `null`; `health_current`, `restart_count` (Docker) vs. `observed_restarts` (agente); `mem_limit_bytes`/`cpu_limit_cores` configurados o null; `metrics` (MetricsDTO) o null. Sin filtros ni paginación todavía (etapa 5). |
+| GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
 | * | `/api/*` desconocida | 404 `not_found` | |
 
 `SummaryDTO.resources`: `cpu_cores_used` (núcleos), `host_cpus`, `mem_used_bytes`, `host_mem_bytes`,
 `cpu_sampled`/`mem_sampled`/`running`, `interval_seconds`. `MetricsDTO`: `cpu_percent` (% de 1 núcleo),
 `mem_*` (uso sin caché, límite efectivo, explícito o no, %), `net_*_bytes` (acumulados) y `net_*_bps`, `blk_*`, `pids`.
 Todos los valores numéricos pueden ser null (no disponible).
-
-| GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
 
 _(completar el resto en la etapa 5)_
 
