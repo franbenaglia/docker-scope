@@ -4,13 +4,13 @@
 
 ## Estado actual
 - **Etapa:** 4 — Persistencia SQLite
-- **Último paso completado:** Etapa 3 cerrada. Colector compartido (una ronda cada `sample_interval`,
-  concurrencia 4) con CPU/memoria/red/block I/O/pids; `/api/containers` incluye `metrics` y los límites
-  configurados; `/api/summary` incluye `resources` (núcleos usados de N del host, memoria usada de la
-  total del host). Modo demo con métricas sintéticas. Panel con columnas de métricas.
-- **Próximo paso:** Crear `internal/store` con `modernc.org/sqlite` (verificar versión y API de
-  `database/sql`), migraciones embebidas y una tabla de muestras alimentada por `collector.OnRound`.
-  Diseñar el esquema pensando en el downsampling (ver Etapa 4 en PLAN.md).
+- **Último paso completado:** `internal/store`: apertura con permisos 0700/0600 (verificado también el
+  `-wal`), migraciones embebidas versionadas, muestras crudas, rollup por minuto con marca de agua,
+  retención, series reducidas (crudas o 1m) y `Writer` con cola acotada. Tests en verde. Todavía no
+  está conectado en main ni en la API.
+- **Próximo paso:** Conectar el store en main (BD separada para demo), alimentarlo desde
+  `collector.OnRound` e `inventory.OnChange`, crear `GET /api/containers/{id}/series` con
+  validación, registrar ADR-011 y verificar que las series sobreviven a un reinicio del agente.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
