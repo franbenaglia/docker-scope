@@ -3,16 +3,14 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 5 — API REST y SSE general
-- **Último paso completado:** Backend de la etapa 5: middleware de seguridad (Host, Origin y
-  Content-Type en las mutaciones, Sec-Fetch-Site, CSP y cabeceras, sin CORS), `allowed_origins` y
-  `-allow-origin`, `GET /api/containers/{id}`, filtros/orden/paginación en `/api/containers`, hub SSE
-  (`internal/sse`) y `GET /api/stream` con eventos tipados. Las goroutines arrancan después de
-  registrar los listeners. Tests en verde (-race).
-  Nota: el commit b5b413a no actualizó PROGRESS.md ni conectó el middleware en main (corregido en el siguiente).
-- **Próximo paso:** Frontend: reemplazar el sondeo por SSE (snapshot REST al conectar y al recibir
-  `resync`, y aplicar los eventos), estados de reconexión y stream muerto (sin heartbeat). Verificar en
-  el navegador y con curl (Host malicioso, Origin). Actualizar ARCHITECTURE (eventos SSE) y cerrar la etapa.
+- **Etapa:** 6 — Motor de alertas
+- **Último paso completado:** Etapa 5 cerrada. Seguridad HTTP, detalle/filtros/paginación, hub SSE
+  y `/api/stream`; el panel funciona en vivo (snapshot + eventos, `resync`, watchdog de heartbeat,
+  reconexión) y el uptime avanza en el cliente.
+- **Próximo paso:** Diseñar `internal/alerts` (máquina de estados pending→open→resolved, duración
+  mínima, cooldown, histéresis, dedup, mantenimiento) con un reloj inyectable, alimentado por
+  `inventory.OnChange` y `collector.OnRound`. Migración 002 (incidents, rules, maintenance). Empezar por
+  los tests del motor (lista de casos en PLAN etapa 6) antes de la persistencia y la API.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -23,6 +21,7 @@
 _(lo que no pudo probarse y por qué)_
 - Etapa 1: `make dev` (agente + Vite en paralelo) no se probó de forma interactiva; `make check` y
   el binario sí.
+- Etapa 5: `make dev` (Vite + -allow-origin) sigue sin probarse de forma interactiva.
 - Etapa 2: no se probó un `systemctl restart docker` real (requiere la autorización del usuario). Sí se
   probó la desconexión real cortando un proxy socat del socket, y el reinicio del daemon con el fake.
 
@@ -36,6 +35,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 5 | Seguridad HTTP (Host/Origin/CSP), detalle/filtros/paginación, hub SSE + /api/stream, panel en vivo. Desvío: el commit b5b413a salió sin PROGRESS ni el middleware conectado (corregido en 271c32f). Corregida una carrera: los listeners se registraban después de arrancar las goroutines. |
 | 2026-10-14 | 4 | Store SQLite (migraciones, crudas + rollup 1m, retención, writer con cola acotada), endpoint de series. Bug corregido: los lotes desencolados durante el apagado se perdían por usar el contexto cancelado. Verificado contra Docker real reiniciando el agente. |
 | 2026-10-14 | 3 | Colector de métricas + Info del host; métricas en la API y el panel; demo con stats sintéticas. Contrastado con `docker stats` real (contenedores dsp-*). |
 | 2026-10-14 | 2 | Inventario (eventos, reconciliación, backoff, dedup, reinicios observados), fake Docker, API desde el inventario, panel con stale. Verificado contra Docker real (contenedores de prueba dsprobe*) y con desconexión vía proxy. |

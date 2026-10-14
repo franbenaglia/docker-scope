@@ -67,14 +67,18 @@ _Cerrada: valores contrastados con `docker stats` en el host (CPU 101 % / 50,5 %
 _Cerrada: verificado con Docker real (contenedor dsp-hist), reiniciando el agente con SIGTERM._
 
 ## Etapa 5 — API REST y SSE general
-- [ ] DTOs, validación, formato de error uniforme, límites de rango, paginación
-- [ ] Endpoints: summary, containers, container detail, series, incidents, rules, maintenance
-- [ ] Hub SSE: eventos tipados, heartbeat, cola acotada por cliente, política de descarte →
+- [x] DTOs, validación, formato de error uniforme, límites de rango, paginación
+- [x] Endpoints: summary, containers (filtros/orden/paginación), container detail, series
+- [ ] → Etapa 6: endpoints de incidents, rules y maintenance (se definen con el motor de alertas)
+- [x] Hub SSE: eventos tipados, heartbeat, cola acotada por cliente, política de descarte →
       evento `resync`
-- [ ] Seguridad: validación de Host, Origin en mutaciones, sin CORS abierto
-- [ ] Tests de validación API, Host/Origin, cliente lento
+- [x] Seguridad: validación de Host, Origin en mutaciones, sin CORS abierto
+- [x] Tests de validación API, Host/Origin, cliente lento
+- [x] Panel: SSE + snapshot REST (reemplaza el sondeo), estados de reconexión
 
 **Terminado cuando:** contratos documentados en ARCHITECTURE.md y tests de API pasan.
+
+_Cerrada: verificado con binario -race contra Docker real (alta y baja en vivo, caída y vuelta del agente) y curl (Host/Origin)._
 
 ## Etapa 6 — Motor de alertas
 - [ ] Reglas: deja de ejecutarse, unhealthy persistente, reinicios en ventana, CPU, memoria
@@ -85,6 +89,8 @@ _Cerrada: verificado con Docker real (contenedor dsp-hist), reiniciando el agent
 - [ ] Causa probable a partir de eventos y exit code (redacción no categórica)
 - [ ] Mantenimiento global y por contenedor con vencimiento; suprime avisos, no recolección
 - [ ] Migración 002: tablas incidents, rules, maintenance
+- [ ] Endpoints REST de incidents (lista paginada, ack), rules (CRUD) y maintenance (pasan por el middleware de mutaciones)
+- [ ] Eventos SSE `incident` (alta y cambios)
 - [ ] Persistencia de incidentes y recuperación
 - [ ] Tests exhaustivos: duración, recuperación, cooldown, mantenimiento, reinicios en ventana,
       histéresis, arranque

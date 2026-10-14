@@ -129,3 +129,28 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
   archivo 0600, creado antes de abrir para que `-wal`/`-shm` hereden 0600. El modo demo usa
   `dockerscope-demo.db`.
 - Las tablas de incidentes, reglas y mantenimiento llegan en la migración 002 (etapa 6).
+
+## ADR-012 — Seguridad HTTP y protocolo SSE
+**Estado:** Aceptada (2026-10-14)
+**Decisión (seguridad):**
+- Host: sólo `localhost` o IPs loopback, con cualquier puerto. Así un dominio hostil que resuelve a
+  127.0.0.1 (DNS rebinding) recibe 403.
+- `/api/*` con `Sec-Fetch-Site: cross-site` → 403. Nunca se envían cabeceras CORS.
+- Mutaciones (todo lo que no es GET/HEAD): `Origin` igual al propio (`http://<host loopback>:<puerto>`)
+  o a uno de `allowed_origins` (que también deben ser loopback). Sin Origin, se aceptan si
+  Sec-Fetch-Site falta (clientes como curl) o es same-origin/none. Además `Content-Type:
+  application/json`, lo que impide CSRF con formularios simples.
+- Cabeceras: CSP `default-src 'self'` (estilos con 'unsafe-inline'), nosniff, no-referrer, X-Frame-Options DENY, COOP/CORP.
+- Desarrollo: Vite reenvía con `changeOrigin` y `make dev-api` pasa `-allow-origin http://127.0.0.1:5173`.
+**Decisión (SSE):**
+- `/api/stream` (general) separado de los futuros streams de logs. Eventos: hello, summary,
+  daemon, container, container_removed, metrics, heartbeat (15 s), resync. Data = JSON en una línea.
+- Hub: máximo 32 clientes (503 por encima), cola de 64 eventos por cliente y deadline de escritura
+  de 10 s. Si la cola se desborda se descarta lo pendiente y se envía `resync`. Sin replay por
+  Last-Event-ID: los ids sólo sirven de diagnóstico.
+- El cliente pide el snapshot REST al recibir `hello` (cada conexión) y ante `resync`. Los eventos que
+  llegan durante el snapshot se aplican después y en orden (los eventos llevan el estado completo).
+  Un watchdog reabre el stream si pasan 2,5 heartbeats sin datos.
+- `summary` se publica tras cada ronda y, con un debounce de 250 ms, tras cambios de contenedores o de conexión.
+- Orden de arranque: listeners registrados antes de lanzar inventario, colector y writer. Al apagar,
+  `hub.Close()` antes de `http.Server.Shutdown`.

@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapas 1–4 implementadas (config, docker, dockertest, inventory, collector, store, demo, api, web). El resto de los paquetes son previstos.
+> Estado: etapas 1–5 implementadas (config, docker, dockertest, inventory, collector, store, sse, demo, api, web). El resto de los paquetes son previstos.
 
 ## Estructura de directorios (prevista)
 ```
@@ -66,7 +66,9 @@ Rutas no-API: archivos de `web/dist`; si no existen, `index.html` (rutas de la S
 | Método | Ruta | Respuesta | Notas |
 |---|---|---|---|
 | GET | `/api/summary` | `SummaryDTO` | `daemon` {status connecting\|connected\|disconnected, since, last_error, attempts}; `synced`/`stale`/`as_of`; `containers` es `null` hasta la primera sincronización (desconocido ≠ 0). `unhealthy` cuenta sólo los que están en ejecución. |
-| GET | `/api/containers` | `ContainerListDTO` | `synced`/`stale`/`as_of` + `items[]` ordenados por nombre. Las fechas van en UTC o `null`; `health_current`, `restart_count` (Docker) vs. `observed_restarts` (agente); `mem_limit_bytes`/`cpu_limit_cores` configurados o null; `metrics` (MetricsDTO) o null. Sin filtros ni paginación todavía (etapa 5). |
+| GET | `/api/containers` | `ContainerListDTO` | Filtros `q` (nombre/imagen/compose o prefijo de ID), `state` (running,paused,restarting,stopped), `health` (none,starting,healthy,unhealthy: salud actual), `project`/`service` (`project=` = fuera de Compose); `sort` name\|state\|cpu\|mem\|uptime\|restarts\|project, `order` asc\|desc (los valores ausentes van siempre al final); `limit` 1–500, `offset`. Respuesta: `total`, `limit`, `offset`, `projects[]`, `synced`/`stale`/`as_of` + `items[]`. Las fechas van en UTC o `null`; `health_current`, `restart_count` (Docker) vs. `observed_restarts` (agente); `mem_limit_bytes`/`cpu_limit_cores` configurados o null; `metrics` (MetricsDTO) o null. Sin filtros ni paginación todavía (etapa 5). |
+| GET | `/api/containers/{id}` | `ContainerDetailDTO` | Sólo por ID completo (un prefijo da 404). ContainerDTO + image_id, labels, restart_max_retry, log_driver, tty, health_failing_streak, error. |
+| GET | `/api/stream` | SSE | Ver "Eventos SSE". |
 | GET | `/api/containers/{id}/series` | `SeriesDTO` | `?range=15m\|6h\|7d` o `?from=&to=` (RFC 3339), `points` 10–1000 (300). 400 `invalid_parameter`/`invalid_range`, 404 si el contenedor no tiene historial. `source` raw\|1m, `bucket_seconds`, `points[]` {t, n, cpu_avg/max, mem_avg/max/limit, mem_pct_avg/max, net_*_bps, blk_*_bps, pids_max}. |
 | * | `/api/*` desconocida | 404 `not_found` | |
 
@@ -77,8 +79,25 @@ Todos los valores numéricos pueden ser null (no disponible).
 
 _(completar el resto en la etapa 5)_
 
+## Seguridad HTTP
+`api.Security.Middleware` envuelve todo (ADR-012): Host loopback, `/api` cross-site → 403, mutaciones con
+Origin propio o `allowed_origins` + JSON, cabeceras CSP/nosniff/etc., nunca CORS.
+
 ## Eventos SSE
-_(completar en etapa 5)_
+`GET /api/stream` (ADR-012). Empieza con `retry: 3000`. Cada evento: `id`, `event`, `data` (JSON en una línea).
+
+| Evento | Data | Cuándo |
+|---|---|---|
+| `hello` | {server_time, mode, interval_seconds, heartbeat_seconds} | Al conectar. El cliente pide el snapshot REST. |
+| `summary` | SummaryDTO | Tras cada ronda; con debounce de 250 ms tras cambios |
+| `daemon` | DaemonDTO | Cambio de conexión con Docker |
+| `container` | ContainerDTO | Alta o cambio |
+| `container_removed` | {id} | Baja |
+| `metrics` | {at, items: {id: MetricsDTO}} | Tras cada ronda; un id ausente = sin muestra actual |
+| `heartbeat` | {t} | Cada 15 s |
+| `resync` | {reason} | Desborde de la cola del cliente: volver a pedir el snapshot |
+
+Frontend: [web/src/lib/live.svelte.ts](../web/src/lib/live.svelte.ts).
 
 ## Esquema SQLite
 Ver [internal/store/migrations](../internal/store/migrations/). Tiempos en ms Unix UTC.

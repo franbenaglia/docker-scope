@@ -1,40 +1,26 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type Container, type Summary } from './lib/api';
+  import { live } from './lib/live.svelte';
   import { fmtBytes, fmtCores, fmtDuration, fmtPercent, fmtRate, fmtTime } from './lib/format';
 
-  // Sondeo periódico del inventario y del colector (el agente no consulta Docker
-  // por cada request). La etapa 5 lo reemplaza por SSE + snapshot.
-  const POLL_MS = 3000;
-
-  let summary = $state<Summary | null>(null);
-  let containers = $state<Container[]>([]);
-  let loadError = $state<string | null>(null);
-  let loading = $state(true);
-
-  async function refresh(signal: AbortSignal) {
-    try {
-      const [s, list] = await Promise.all([api.summary(signal), api.containers(signal)]);
-      summary = s;
-      containers = list.items;
-      loadError = null;
-    } catch (e) {
-      if (signal.aborted) return;
-      loadError = e instanceof Error ? e.message : String(e);
-    } finally {
-      loading = false;
-    }
-  }
+  // Datos en vivo: snapshot REST + eventos SSE (ver lib/live.svelte.ts).
+  // Reloj local para que el uptime avance entre eventos.
+  let now = $state(Date.now());
 
   onMount(() => {
-    const ctrl = new AbortController();
-    void refresh(ctrl.signal);
-    const t = setInterval(() => void refresh(ctrl.signal), POLL_MS);
+    live.start();
+    const tick = setInterval(() => (now = Date.now()), 1000);
     return () => {
-      clearInterval(t);
-      ctrl.abort();
+      live.stop();
+      clearInterval(tick);
     };
   });
+
+  const uptime = (startedAt: string) => (now - Date.parse(startedAt)) / 1000;
+
+  const summary = $derived(live.summary);
+  const containers = $derived(live.sorted);
+  const agentLost = $derived(live.stream === 'reconnecting');
 
   const healthLabel: Record<string, string> = {
     none: 'Sin healthcheck',
@@ -67,14 +53,17 @@
 {/if}
 
 <main>
-  {#if loading}
+  {#if !summary && agentLost}
+    <div class="banner bad" role="alert">No se pudo contactar al agente. Reintentando…</div>
+  {:else if !summary && live.error}
+    <div class="banner bad" role="alert">Error al obtener datos del agente: {live.error}</div>
+  {:else if !summary}
     <p class="muted">Cargando…</p>
-  {:else if loadError && !summary}
-    <div class="banner bad" role="alert">No se pudo contactar al agente: {loadError}</div>
-  {:else if summary}
-    {#if loadError}
+  {:else}
+    {#if agentLost}
       <div class="banner warn" role="status">
-        Sin respuesta del agente; los datos mostrados son de las {fmtTime(summary.generated_at)}.
+        Se perdió la conexión en vivo con el agente; reconectando. Los datos son de las
+        {fmtTime(summary.generated_at)} y pueden estar desactualizados.
       </div>
     {/if}
     {#if summary.daemon.status === 'disconnected'}
@@ -89,7 +78,7 @@
       </div>
     {/if}
 
-    <section class="cards" class:stale={summary.stale} aria-label="Resumen">
+    <section class="cards" class:stale={summary.stale || agentLost} aria-label="Resumen">
       {#if summary.containers}
         {@const c = summary.containers}
         <div class="card"><span class="n ok">{c.running}</span><span>En ejecución</span></div>
@@ -123,7 +112,7 @@
     </section>
 
     {#if summary.synced}
-      <section class="list" class:stale={summary.stale} aria-label="Contenedores">
+      <section class="list" class:stale={summary.stale || agentLost} aria-label="Contenedores">
         <table>
           <thead>
             <tr>
@@ -148,8 +137,8 @@
                 <td><code>{c.short_id}</code></td>
                 <td>
                   <span class="state {c.state}">{c.state}</span>
-                  {#if c.uptime_seconds !== null}
-                    <div class="muted small">activo {fmtDuration(c.uptime_seconds)}</div>
+                  {#if c.uptime_seconds !== null && c.started_at}
+                    <div class="muted small">activo {fmtDuration(uptime(c.started_at))}</div>
                   {:else if c.exit_code !== null}
                     <div class="muted small">código {c.exit_code}{c.oom_killed ? ' · OOM' : ''}</div>
                   {/if}
@@ -219,8 +208,12 @@
     {/if}
 
     <p class="muted small">
-      {summary.stale ? 'Datos desactualizados de las' : 'Actualizado:'}
-      {fmtTime(summary.stale ? summary.as_of : summary.generated_at)}
+      {#if summary.stale}
+        Datos desactualizados de las {fmtTime(summary.as_of)}
+      {:else}
+        Actualizado: {fmtTime(summary.generated_at)}
+      {/if}
+      · {live.stream === 'live' ? 'en vivo' : 'sin conexión en vivo'}
     </p>
   {/if}
 </main>
