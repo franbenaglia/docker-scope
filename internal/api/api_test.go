@@ -12,6 +12,8 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 
+	"github.com/franbenaglia/docker-scope/internal/collector"
+	"github.com/franbenaglia/docker-scope/internal/docker"
 	"github.com/franbenaglia/docker-scope/internal/inventory"
 )
 
@@ -19,11 +21,20 @@ type fakeInv struct{ snap inventory.Snapshot }
 
 func (f fakeInv) Snapshot() inventory.Snapshot { return f.snap }
 
+type fakeMetrics map[string]collector.Sample
+
+func (f fakeMetrics) LatestAll() map[string]collector.Sample { return f }
+func (f fakeMetrics) Interval() time.Duration                { return 5 * time.Second }
+
 var now = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func newServer(snap inventory.Snapshot, web fstest.MapFS) *Server {
+	return newServerMetrics(snap, nil, web)
+}
+
+func newServerMetrics(snap inventory.Snapshot, m fakeMetrics, web fstest.MapFS) *Server {
 	return &Server{
-		Inventory: fakeInv{snap}, Mode: "docker", Web: web,
+		Inventory: fakeInv{snap}, Metrics: m, Mode: "docker", Web: web,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now: func() time.Time { return now },
 	}
@@ -160,5 +171,63 @@ func TestSPANotBuilt(t *testing.T) {
 	s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("status %d", rec.Code)
+	}
+}
+
+func f64(v float64) *float64 { return &v }
+func u64(v uint64) *uint64   { return &v }
+
+func TestMetricsAndResources(t *testing.T) {
+	snap := inventory.Snapshot{
+		Conn: connected(), Synced: true, AsOf: now,
+		Host: docker.HostInfo{NCPU: 8, MemTotal: 16 << 30},
+		Containers: []*inventory.Container{
+			{ID: "a", Name: "a", State: container.StateRunning, MemoryLimit: 64 << 20, CPULimit: 0.5},
+			{ID: "b", Name: "b", State: container.StateRunning},
+			{ID: "c", Name: "c", State: container.StateRunning}, // no sample yet
+			{ID: "d", Name: "d", State: container.StateExited},  // stale sample must be ignored
+		},
+	}
+	m := fakeMetrics{
+		"a": {ContainerID: "a", At: now, CPUPercent: f64(150), MemUsage: u64(32 << 20), MemLimit: u64(64 << 20), MemLimitExplicit: true, MemPercent: f64(50)},
+		"b": {ContainerID: "b", At: now, MemUsage: u64(10 << 20)}, // first sample: no CPU yet
+		"d": {ContainerID: "d", At: now, CPUPercent: f64(999), MemUsage: u64(1 << 30)},
+	}
+	s := newServerMetrics(snap, m, nil)
+
+	var sum SummaryDTO
+	get(t, s, "/api/summary", &sum)
+	r := sum.Resources
+	if r == nil || r.HostCPUs != 8 || r.HostMemBytes != 16<<30 || r.Running != 3 {
+		t.Fatalf("resources = %+v", r)
+	}
+	if r.CPUCoresUsed == nil || *r.CPUCoresUsed != 1.5 || r.CPUSampled != 1 {
+		t.Errorf("cpu: %v núcleos con %d muestras", r.CPUCoresUsed, r.CPUSampled)
+	}
+	if r.MemUsedBytes == nil || *r.MemUsedBytes != 42<<20 || r.MemSampled != 2 {
+		t.Errorf("mem: %v con %d muestras", r.MemUsedBytes, r.MemSampled)
+	}
+
+	var raw struct {
+		Items []map[string]any `json:"items"`
+	}
+	get(t, s, "/api/containers", &raw)
+	byID := map[string]map[string]any{}
+	for _, it := range raw.Items {
+		byID[it["id"].(string)] = it
+	}
+	a := byID["a"]
+	if a["mem_limit_bytes"].(float64) != 64<<20 || a["cpu_limit_cores"].(float64) != 0.5 {
+		t.Errorf("límites a: %v %v", a["mem_limit_bytes"], a["cpu_limit_cores"])
+	}
+	am := a["metrics"].(map[string]any)
+	if am["cpu_percent"].(float64) != 150 || am["mem_limit_explicit"] != true {
+		t.Errorf("métricas a: %v", am)
+	}
+	if bm := byID["b"]["metrics"].(map[string]any); bm["cpu_percent"] != nil {
+		t.Errorf("cpu no disponible debe ser null, no %v", bm["cpu_percent"])
+	}
+	if byID["c"]["metrics"] != nil || byID["d"]["metrics"] != nil || byID["b"]["cpu_limit_cores"] != nil {
+		t.Error("sin muestra / detenido / sin límite → null")
 	}
 }

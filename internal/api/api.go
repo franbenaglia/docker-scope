@@ -21,6 +21,7 @@ type Inventory interface {
 // Server holds the HTTP handlers' dependencies.
 type Server struct {
 	Inventory Inventory
+	Metrics   Metrics
 	Mode      string // "docker" or "demo"
 	Web       fs.FS  // built frontend (index.html at the root)
 	Log       *slog.Logger
@@ -62,8 +63,9 @@ type SummaryDTO struct {
 	Mode   string    `json:"mode"`
 	Daemon DaemonDTO `json:"daemon"`
 	DataStateDTO
-	Containers  *CountsDTO `json:"containers"` // null until the first sync
-	GeneratedAt time.Time  `json:"generated_at"`
+	Containers  *CountsDTO    `json:"containers"` // null until the first sync
+	Resources   *ResourcesDTO `json:"resources"`  // null until the first sync
+	GeneratedAt time.Time     `json:"generated_at"`
 }
 
 // CountsDTO counts containers by state.
@@ -102,6 +104,14 @@ type ContainerDTO struct {
 
 	ComposeProject string `json:"compose_project,omitempty"`
 	ComposeService string `json:"compose_service,omitempty"`
+
+	// Configured limits; null when none.
+	MemLimitBytes *int64   `json:"mem_limit_bytes"`
+	CPULimitCores *float64 `json:"cpu_limit_cores"`
+
+	// Metrics is the latest sample; null if not available (not running, first
+	// round pending, Docker unreachable before any sample).
+	Metrics *MetricsDTO `json:"metrics"`
 }
 
 // ContainerListDTO is the response of GET /api/containers.
@@ -121,6 +131,8 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	if snap.Synced {
 		c := countContainers(snap.Containers)
 		out.Containers = &c
+		r := resources(snap, s.Metrics.LatestAll(), s.Metrics.Interval())
+		out.Resources = &r
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -128,9 +140,14 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
 	snap := s.Inventory.Snapshot()
 	now := s.Now()
+	latest := s.Metrics.LatestAll()
 	out := ContainerListDTO{DataStateDTO: dataState(snap), Items: make([]ContainerDTO, 0, len(snap.Containers))}
 	for _, c := range snap.Containers {
-		out.Items = append(out.Items, containerDTO(c, now))
+		d := containerDTO(c, now)
+		if m, ok := latest[c.ID]; ok && c.Running() {
+			d.Metrics = metricsDTO(m)
+		}
+		out.Items = append(out.Items, d)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -159,6 +176,12 @@ func containerDTO(c *inventory.Container, now time.Time) ContainerDTO {
 	if c.Running() && !c.StartedAt.IsZero() {
 		up := int64(c.Uptime(now) / time.Second)
 		d.UptimeSeconds = &up
+	}
+	if c.MemoryLimit > 0 {
+		d.MemLimitBytes = &c.MemoryLimit
+	}
+	if c.CPULimit > 0 {
+		d.CPULimitCores = &c.CPULimit
 	}
 	return d
 }

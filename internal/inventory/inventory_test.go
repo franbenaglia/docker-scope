@@ -107,6 +107,9 @@ func TestInitialSyncMarksPreexistingState(t *testing.T) {
 	h := start(t, fake)
 	s := h.waitConnected()
 
+	if s.Host.NCPU != 8 || s.Host.MemTotal != 16<<30 {
+		t.Errorf("host = %+v", s.Host)
+	}
 	if !s.Synced || s.Stale || len(s.Containers) != 2 {
 		t.Fatalf("snapshot inesperado: synced=%v stale=%v n=%d", s.Synced, s.Stale, len(s.Containers))
 	}

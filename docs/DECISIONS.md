@@ -86,3 +86,25 @@ con "unhealthy").
 **Decisión:** `demo.New` devuelve un `dockertest.Fake` poblado. El modo demo recorre exactamente
 el mismo camino (inventario, API, panel) que Docker real, sin código especial en esas capas. El agente
 usa una sola fuente: demo o Docker, nunca las dos.
+
+## ADR-010 — Muestreo y cálculo de métricas
+**Estado:** Aceptada (2026-10-14). Precisa ADR-002 y ADR-003 con lo observado en el host (cgroup v2).
+**Decisión:**
+- Un único colector hace una ronda cada `sample_interval`: stats one-shot (`stream=false`, sin
+  `IncludePreviousSample`, que hace esperar 1 s al daemon) para cada contenedor en ejecución, con
+  concurrencia 4 y timeout min(intervalo, 10 s). Las rondas no se solapan. Sin conexión no hay rondas.
+- Las tasas se calculan entre muestras propias consecutivas, usando el `read` del daemon como reloj.
+  No hay tasa en la primera muestra, si el contador retrocede (reset), si cambió `StartedAt`
+  (reinicio) ni si el intervalo supera 10× el intervalo de muestreo.
+- CPU: `Δtotal_usage / Δsystem_cpu_usage × online_cpus × 100` (online_cpus o, si falta, len(percpu)).
+- Memoria: `usage − total_inactive_file` (v1) o `− inactive_file` (v2) cuando es menor que usage.
+  El límite efectivo es `memory_stats.limit`; es "explícito" sólo si `HostConfig.Memory > 0`. Sin
+  límite, Docker informa la memoria del host y la UI lo muestra como "sin límite". Un límite ≥ 2^60
+  (el "ilimitado" de v1) no produce porcentaje.
+- Block I/O: suma de `io_service_bytes_recursive` por op read/write (sin distinguir mayúsculas). Si
+  la lista es null (cgroup v2 sin I/O, o sin soporte) el valor es no disponible, no 0; la UI lo
+  explica con un tooltip. `docker stats` muestra 0 B en ese caso: es una diferencia deliberada.
+- Red: suma de todas las interfaces; sin `networks` (p. ej. `--network none`), no disponible.
+- Un contenedor detenido o que falla en la ronda sale del conjunto de "últimas muestras".
+- Agregados (`/api/summary.resources`): suma de núcleos y de bytes de los contenedores con dato,
+  con el denominador del host (Info: NCPU, MemTotal) y cuántos contenedores entran en la suma.

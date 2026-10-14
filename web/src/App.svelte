@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Container, type Summary } from './lib/api';
-  import { fmtDuration, fmtTime } from './lib/format';
+  import { fmtBytes, fmtCores, fmtDuration, fmtPercent, fmtRate, fmtTime } from './lib/format';
 
-  // Etapa 2: sondeo periódico del inventario (el agente no consulta Docker por
-  // cada request). La etapa 5 lo reemplaza por SSE + snapshot.
+  // Sondeo periódico del inventario y del colector (el agente no consulta Docker
+  // por cada request). La etapa 5 lo reemplaza por SSE + snapshot.
   const POLL_MS = 3000;
 
   let summary = $state<Summary | null>(null);
@@ -107,6 +107,19 @@
       {:else}
         <div class="card"><span class="n muted">—</span><span>Contenedores (sin datos)</span></div>
       {/if}
+      {#if summary.resources}
+        {@const r = summary.resources}
+        <div class="card wide" title="Suma del uso de CPU de los contenedores en ejecución; 1 núcleo = 100% de una CPU">
+          <span class="n">{r.cpu_cores_used !== null ? fmtCores(r.cpu_cores_used) : '—'}</span>
+          <span>núcleos de CPU en uso, de {r.host_cpus} del host</span>
+          <span class="muted small">suma de {r.cpu_sampled} de {r.running} contenedores en ejecución</span>
+        </div>
+        <div class="card wide" title="Suma de la memoria usada (sin caché inactiva) de los contenedores en ejecución">
+          <span class="n">{r.mem_used_bytes !== null ? fmtBytes(r.mem_used_bytes) : '—'}</span>
+          <span>de memoria en uso, de {fmtBytes(r.host_mem_bytes)} del host</span>
+          <span class="muted small">suma de {r.mem_sampled} de {r.running} contenedores en ejecución</span>
+        </div>
+      {/if}
     </section>
 
     {#if summary.synced}
@@ -118,6 +131,10 @@
               <th>ID</th>
               <th>Estado</th>
               <th>Salud</th>
+              <th title="% de un núcleo: 100% = 1 CPU completa; puede superar 100% en hosts multinúcleo">CPU (% 1 núcleo)</th>
+              <th title="Uso sin caché de página inactiva / límite">Memoria</th>
+              <th title="Tasa de red recibida / enviada">Red ↓ / ↑</th>
+              <th title="Tráfico de block I/O leído / escrito (no es espacio en disco)">Disco L / E</th>
               <th title="Docker RestartCount / reinicios observados por el agente">Reinicios D / obs.</th>
               <th>Compose</th>
             </tr>
@@ -125,7 +142,9 @@
           <tbody>
             {#each containers as c (c.id)}
               <tr>
-                <td>{c.name}<div class="muted small">{c.image}</div></td>
+                <td class="name">
+                  {c.name}<div class="muted small ellipsis" title={c.image}>{c.image}</div>
+                </td>
                 <td><code>{c.short_id}</code></td>
                 <td>
                   <span class="state {c.state}">{c.state}</span>
@@ -146,13 +165,53 @@
                     </span>
                   {/if}
                 </td>
+                {#if c.metrics}
+                  {@const m = c.metrics}
+                  <td class="num">
+                    {m.cpu_percent !== null ? fmtPercent(m.cpu_percent) : '—'}
+                    {#if c.cpu_limit_cores !== null}
+                      <div class="muted small">límite {fmtCores(c.cpu_limit_cores)} núcl.</div>
+                    {/if}
+                  </td>
+                  <td class="num">
+                    {m.mem_usage_bytes !== null ? fmtBytes(m.mem_usage_bytes) : '—'}
+                    {#if m.mem_limit_bytes !== null && m.mem_percent !== null}
+                      <div class="muted small">
+                        {m.mem_limit_explicit
+                          ? `${fmtPercent(m.mem_percent)} de ${fmtBytes(m.mem_limit_bytes)}`
+                          : 'sin límite'}
+                      </div>
+                    {/if}
+                  </td>
+                  <td class="num">
+                    {m.net_rx_bps !== null ? fmtRate(m.net_rx_bps) : '—'}
+                    <div class="muted small">{m.net_tx_bps !== null ? fmtRate(m.net_tx_bps) : '—'}</div>
+                  </td>
+                  {#if m.blk_read_bytes === null}
+                    <td
+                      class="muted"
+                      title="Docker no informa block I/O para este contenedor (en cgroup v2 ocurre mientras no haya hecho I/O)"
+                    >
+                      n/d
+                    </td>
+                  {:else}
+                    <td class="num">
+                      {m.blk_read_bps !== null ? fmtRate(m.blk_read_bps) : '—'}
+                      <div class="muted small">{m.blk_write_bps !== null ? fmtRate(m.blk_write_bps) : '—'}</div>
+                    </td>
+                  {/if}
+                {:else}
+                  <td class="muted" colspan="4" title="Sin muestra: contenedor detenido o primera ronda pendiente">
+                    {c.state === 'running' ? 'midiendo…' : '—'}
+                  </td>
+                {/if}
                 <td class="num">{c.restart_count} / {c.observed_restarts}</td>
                 <td class="muted">
                   {c.compose_project ? `${c.compose_project} / ${c.compose_service ?? '?'}` : '—'}
                 </td>
               </tr>
             {:else}
-              <tr><td colspan="6" class="muted">No hay contenedores.</td></tr>
+              <tr><td colspan="10" class="muted">No hay contenedores.</td></tr>
             {/each}
           </tbody>
         </table>
@@ -235,6 +294,11 @@
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 0.75rem;
   }
+  @media (min-width: 480px) {
+    .card.wide {
+      grid-column: span 2;
+    }
+  }
   .card {
     display: flex;
     flex-direction: column;
@@ -272,8 +336,18 @@
     font-weight: 600;
     white-space: nowrap;
   }
+  .name {
+    max-width: 22rem;
+    overflow-wrap: anywhere;
+  }
+  .ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .num {
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .state.running,
   .health.healthy {

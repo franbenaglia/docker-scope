@@ -40,15 +40,17 @@ _Cerrada: verificado con el fake (tests) y contra Docker real cortando un proxy 
 no se reinició el daemon del host._
 
 ## Etapa 3 — Colector de métricas
-- [ ] Muestreador único con intervalo configurable (5s), concurrencia limitada, timeouts
-- [ ] CPU % de un núcleo (ADR-002), memoria sin caché (ADR-003), red, block I/O
-- [ ] Tasas por delta; manejo de resets (no negativos); primera muestra = no disponible
-- [ ] Límite de memoria: distinguir explícito vs. heredado del host
-- [ ] cgroup v1/v2
-- [ ] Último snapshot compartido para todos los clientes
-- [ ] Tests de deltas, resets, valores ausentes, cgroup v1/v2
+- [x] Muestreador único con intervalo configurable (5s), concurrencia limitada, timeouts
+- [x] CPU % de un núcleo (ADR-002), memoria sin caché (ADR-003), red, block I/O
+- [x] Tasas por delta; manejo de resets (no negativos); primera muestra = no disponible
+- [x] Límite de memoria: distinguir explícito vs. heredado del host
+- [x] cgroup v1/v2
+- [x] Último snapshot compartido para todos los clientes
+- [x] Tests de deltas, resets, valores ausentes, cgroup v1/v2
 
 **Terminado cuando:** tests de cálculo pasan y `/api/containers` devuelve métricas reales.
+
+_Cerrada: valores contrastados con `docker stats` en el host (CPU 101 % / 50,5 % con --cpus 0.5, memoria, block I/O)._
 
 ## Etapa 4 — Persistencia SQLite
 - [ ] Migraciones versionadas embebidas

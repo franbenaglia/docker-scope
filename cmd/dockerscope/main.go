@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/franbenaglia/docker-scope/internal/api"
+	"github.com/franbenaglia/docker-scope/internal/collector"
 	"github.com/franbenaglia/docker-scope/internal/config"
 	"github.com/franbenaglia/docker-scope/internal/demo"
 	"github.com/franbenaglia/docker-scope/internal/docker"
@@ -56,14 +57,18 @@ func run() error {
 	}
 
 	inv := inventory.New(src, inventory.Options{Log: log.With("comp", "inventory")})
+	col := collector.New(src, inv, collector.Options{
+		Interval: cfg.SampleInterval.D(), Log: log.With("comp", "collector"),
+	})
 	var wg sync.WaitGroup
 	wg.Go(func() { _ = inv.Run(ctx) })
+	wg.Go(func() { _ = col.Run(ctx) })
 	defer func() { stop(); wg.Wait() }() // cancel first: Run returns on ctx.Done
 
 	srv := &http.Server{
 		Addr: cfg.Listen,
 		Handler: (&api.Server{
-			Inventory: inv, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
+			Inventory: inv, Metrics: col, Mode: mode, Web: web.Dist(), Log: log, Now: time.Now,
 		}).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,

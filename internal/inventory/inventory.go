@@ -108,6 +108,8 @@ type Snapshot struct {
 	// AsOf is when Containers was last known to be current.
 	AsOf       time.Time
 	Containers []*Container // sorted by name, then ID
+	// Host is the Docker host info from the last connection (zero if never connected).
+	Host docker.HostInfo
 }
 
 // Inventory tracks containers. Create with New, register listeners, then Run.
@@ -119,6 +121,7 @@ type Inventory struct {
 	containers map[string]*Container
 	conn       ConnState
 	synced     bool
+	host       docker.HostInfo
 
 	// Owned by the Run goroutine.
 	onChange  []func(Change)
@@ -150,7 +153,7 @@ func (i *Inventory) OnConnection(fn func(ConnState)) { i.onConn = append(i.onCon
 func (i *Inventory) Snapshot() Snapshot {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	s := Snapshot{Conn: i.conn, Synced: i.synced, Containers: make([]*Container, 0, len(i.containers))}
+	s := Snapshot{Conn: i.conn, Synced: i.synced, Host: i.host, Containers: make([]*Container, 0, len(i.containers))}
 	if i.conn.Status == ConnConnected {
 		s.AsOf = i.opts.Now()
 	} else {
@@ -211,6 +214,15 @@ func (i *Inventory) session(ctx context.Context) (connected bool, err error) {
 	if err != nil {
 		return false, fmt.Errorf("ping: %w", err)
 	}
+	ictx, cancel := context.WithTimeout(ctx, i.opts.OpTimeout)
+	host, err := i.api.Info(ictx)
+	cancel()
+	if err != nil {
+		return false, fmt.Errorf("info: %w", err)
+	}
+	i.mu.Lock()
+	i.host = host
+	i.mu.Unlock()
 
 	sctx, cancelStream := context.WithCancel(ctx)
 	defer cancelStream()

@@ -22,6 +22,8 @@ import (
 type API interface {
 	// Ping checks the daemon and (re)negotiates the API version.
 	Ping(ctx context.Context) (PingInfo, error)
+	// Info returns host facts used as denominators and for diagnostics.
+	Info(ctx context.Context) (HostInfo, error)
 	// ListContainers lists all containers, including stopped ones.
 	ListContainers(ctx context.Context) ([]container.Summary, error)
 	// InspectContainer returns ErrNotFound (wrapped) if the container does not exist.
@@ -42,6 +44,15 @@ var ErrNotFound = errors.New("contenedor inexistente")
 type PingInfo struct {
 	APIVersion string
 	OSType     string
+}
+
+// HostInfo describes the Docker host.
+type HostInfo struct {
+	NCPU          int
+	MemTotal      int64 // bytes
+	CgroupVersion string
+	ServerVersion string
+	OS            string
 }
 
 // Client is the real implementation of API backed by the moby SDK.
@@ -75,6 +86,18 @@ func (c *Client) Ping(ctx context.Context) (PingInfo, error) {
 		return PingInfo{}, err
 	}
 	return PingInfo{APIVersion: res.APIVersion, OSType: res.OSType}, nil
+}
+
+func (c *Client) Info(ctx context.Context) (HostInfo, error) {
+	res, err := c.cli.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return HostInfo{}, err
+	}
+	i := res.Info
+	return HostInfo{
+		NCPU: i.NCPU, MemTotal: i.MemTotal, CgroupVersion: i.CgroupVersion,
+		ServerVersion: i.ServerVersion, OS: i.OperatingSystem,
+	}, nil
 }
 
 func (c *Client) ListContainers(ctx context.Context) ([]container.Summary, error) {

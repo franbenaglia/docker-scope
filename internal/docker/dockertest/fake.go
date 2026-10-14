@@ -69,6 +69,18 @@ func (f *Fake) Ping(context.Context) (docker.PingInfo, error) {
 	return docker.PingInfo{APIVersion: "1.52", OSType: "linux"}, nil
 }
 
+// FakeHost is the host reported by Fake.Info.
+var FakeHost = docker.HostInfo{NCPU: 8, MemTotal: 16 << 30, CgroupVersion: "2", ServerVersion: "fake", OS: "Fake Linux"}
+
+func (f *Fake) Info(context.Context) (docker.HostInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.down {
+		return docker.HostInfo{}, ErrDown
+	}
+	return FakeHost, nil
+}
+
 func (f *Fake) ListContainers(context.Context) ([]container.Summary, error) {
 	f.Lists.Add(1)
 	f.mu.Lock()

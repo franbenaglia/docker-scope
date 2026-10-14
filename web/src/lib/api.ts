@@ -26,12 +26,49 @@ export interface DataState {
   as_of: string;
 }
 
+/** Suma de uso de contenedores en ejecución, con unidad y denominador explícitos. */
+export interface Resources {
+  /** Núcleos en uso (suma de cpu_percent/100). */
+  cpu_cores_used: number | null;
+  host_cpus: number;
+  mem_used_bytes: number | null;
+  host_mem_bytes: number;
+  cpu_sampled: number;
+  mem_sampled: number;
+  running: number;
+  interval_seconds: number;
+}
+
 export interface Summary extends DataState {
   mode: 'docker' | 'demo';
   daemon: Daemon;
   /** null hasta la primera sincronización. */
   containers: Counts | null;
+  resources: Resources | null;
   generated_at: string;
+}
+
+/** Última muestra. null = no disponible (nunca un cero inventado). */
+export interface Metrics {
+  at: string;
+  /** % de un núcleo: 100 = 1 núcleo; puede llegar a online_cpus×100. */
+  cpu_percent: number | null;
+  online_cpus: number;
+  mem_usage_bytes: number | null;
+  mem_cache_excluded: boolean;
+  /** Límite efectivo; si mem_limit_explicit es false, es la memoria del host. */
+  mem_limit_bytes: number | null;
+  mem_limit_explicit: boolean;
+  mem_percent: number | null;
+  net_rx_bytes: number | null;
+  net_tx_bytes: number | null;
+  net_rx_bps: number | null;
+  net_tx_bps: number | null;
+  blk_read_bytes: number | null;
+  blk_write_bytes: number | null;
+  blk_read_bps: number | null;
+  blk_write_bps: number | null;
+  pids: number | null;
 }
 
 export type Health = 'none' | 'starting' | 'healthy' | 'unhealthy';
@@ -59,6 +96,9 @@ export interface Container {
   last_observed_restart: string | null;
   compose_project?: string;
   compose_service?: string;
+  mem_limit_bytes: number | null;
+  cpu_limit_cores: number | null;
+  metrics: Metrics | null;
 }
 
 export interface ContainerList extends DataState {
