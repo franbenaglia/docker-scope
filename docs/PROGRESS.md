@@ -4,10 +4,9 @@
 
 ## Estado actual
 - **Etapa:** 1 — Esqueleto e integración mínima real
-- **Último paso completado:** Etapa 0 (harness creado).
-- **Próximo paso:** Verificar en documentación oficial las versiones vigentes del SDK Docker
-  (módulo `github.com/moby/moby/client` vs `github.com/docker/docker/client`), del driver SQLite
-  y del stack frontend; registrarlas en DECISIONS.md (ADR-006) y hacer `go mod init`.
+- **Último paso completado:** Backend Go mínimo (config, docker.API, demo estático, /api/summary,
+  SPA embebida, apagado ordenado) con tests en verde. ADR-006 resuelto.
+- **Próximo paso:** Frontend `web/` (Vite + Svelte + TS) que muestre /api/summary, luego Makefile.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -19,6 +18,11 @@ _(lo que no pudo probarse y por qué)_
 
 ## Pendientes / ideas fuera de etapa
 _(no ampliar el alcance de SPEC.md; anotar aquí)_
+- **Etapa 2:** si el primer ping falla (Docker caído al arrancar), el SDK negocia la API mínima
+  (1.40) y no vuelve a negociar. En la reconexión, usar `PingOptions{NegotiateAPIVersion: true,
+  ForceNegotiate: true}`.
+- **Etapa 2:** `/api/summary` consulta Docker en cada request (temporal); pasarlo al inventario
+  compartido.
 
 ## Bitácora
 | Fecha | Etapa | Resumen |

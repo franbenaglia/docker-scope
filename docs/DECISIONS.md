@@ -46,10 +46,17 @@ loopback es error de configuración. Acceso remoto: túnel SSH documentado en RE
 externo.
 
 ## ADR-006 — Dependencias y versiones
-**Estado:** Pendiente (resolver al inicio de la etapa 1)
-**A decidir y verificar en documentación oficial:**
-- SDK Docker: módulo actual (`github.com/moby/moby/client` + `github.com/moby/moby/api` vs
-  `github.com/docker/docker/client`) y versión; usar negociación de API.
-- SQLite sin cgo: candidato `modernc.org/sqlite`.
-- Frontend: Svelte (versión estable actual, runes), Vite, TypeScript, `svelte-check`.
-- Gráficos: Chart.js (+ adaptador de fechas si hace falta), empaquetado localmente.
+**Estado:** Aceptada (2026-10-14). Versiones consultadas en proxy.golang.org y registro npm.
+**Decisión:**
+- SDK Docker: `github.com/moby/moby/client` v0.6.2 (+ `github.com/moby/moby/api` v1.56.x).
+  `github.com/docker/docker` quedó congelado en v28.5.2 y el proyecto moby migró a estos
+  módulos. La negociación de versión de API está activa por defecto en `client.New`
+  (`WithAPIVersionNegotiation` está deprecada y no hace nada). API soportada: 1.40–1.56.
+  Nota: la API v0.x usa structs `XxxOptions`/`XxxResult` en todos los métodos.
+- SQLite sin cgo: `modernc.org/sqlite` (v1.60.x).
+- Frontend (versiones exactas, sin `^`): svelte 5.57.2 (runes), vite 8.3.4,
+  @sveltejs/vite-plugin-svelte 7.3.1, svelte-check 4.7.6, @tsconfig/svelte 5.0.8,
+  chart.js 4.5.1.
+- TypeScript **6.0.3**, no 7.x: svelte-check 4.7.6 declara peer `typescript ^5 || ^6`.
+- Vite 8 requiere Node ^20.19 o ≥22.12 (el entorno tiene 20.20.2: OK).
+**Consecuencias:** Revisar la compatibilidad de TS 7 cuando svelte-check la soporte (añadir un ADR nuevo).
