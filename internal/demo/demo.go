@@ -11,7 +11,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 
-	"github.com/fbenaglia/dockerscope/internal/docker"
+	"github.com/franbenaglia/docker-scope/internal/docker"
 )
 
 // Source implements docker.API with fixed simulated containers.

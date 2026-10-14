@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fbenaglia/dockerscope/internal/api"
-	"github.com/fbenaglia/dockerscope/internal/config"
-	"github.com/fbenaglia/dockerscope/internal/demo"
-	"github.com/fbenaglia/dockerscope/internal/docker"
-	"github.com/fbenaglia/dockerscope/web"
+	"github.com/franbenaglia/docker-scope/internal/api"
+	"github.com/franbenaglia/docker-scope/internal/config"
+	"github.com/franbenaglia/docker-scope/internal/demo"
+	"github.com/franbenaglia/docker-scope/internal/docker"
+	"github.com/franbenaglia/docker-scope/web"
 )
 
 func main() {

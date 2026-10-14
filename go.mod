@@ -1,4 +1,4 @@
-module github.com/fbenaglia/dockerscope
+module github.com/franbenaglia/docker-scope
 
 go 1.27.2
 

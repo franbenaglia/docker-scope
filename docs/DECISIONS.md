@@ -60,3 +60,9 @@ externo.
 - TypeScript **6.0.3**, no 7.x: svelte-check 4.7.6 declara peer `typescript ^5 || ^6`.
 - Vite 8 requiere Node ^20.19 o ≥22.12 (el entorno tiene 20.20.2: OK).
 **Consecuencias:** Revisar la compatibilidad de TS 7 cuando svelte-check la soporte (añadir un ADR nuevo).
+
+## ADR-007 — Ruta del módulo Go y repositorio
+**Estado:** Aceptada (2026-10-14)
+**Decisión:** El módulo es `github.com/franbenaglia/docker-scope` y el remoto `origin` es
+https://github.com/franbenaglia/docker-scope.git. El binario conserva el nombre `dockerscope`.
+**Consecuencias:** Push sólo cuando el usuario lo pida.
