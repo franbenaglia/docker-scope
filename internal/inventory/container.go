@@ -61,6 +61,14 @@ type Container struct {
 
 	TTY       bool
 	LogDriver string
+
+	// MemoryLimit is the explicitly configured memory limit in bytes
+	// (docker run --memory); 0 means none. The effective cgroup limit comes
+	// with the metrics.
+	MemoryLimit int64
+	// CPULimit is the configured CPU limit in cores (--cpus, or CFS
+	// quota/period); 0 means none.
+	CPULimit float64
 }
 
 // ShortID returns the 12-character ID used by the Docker CLI.
@@ -141,6 +149,17 @@ func fromInspect(r container.InspectResponse) *Container {
 		}
 		c.RestartMaxRetry = hc.RestartPolicy.MaximumRetryCount
 		c.LogDriver = hc.LogConfig.Type
+		c.MemoryLimit = hc.Memory
+		switch {
+		case hc.NanoCPUs > 0:
+			c.CPULimit = float64(hc.NanoCPUs) / 1e9
+		case hc.CPUQuota > 0:
+			period := hc.CPUPeriod
+			if period <= 0 {
+				period = 100_000 // kernel default CFS period (µs)
+			}
+			c.CPULimit = float64(hc.CPUQuota) / float64(period)
+		}
 	}
 	return c
 }

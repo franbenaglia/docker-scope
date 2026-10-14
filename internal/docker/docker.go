@@ -5,8 +5,10 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -27,6 +29,10 @@ type API interface {
 	// Events streams container events from since (zero: only new events) until
 	// ctx is cancelled. The error channel receives one value when the stream ends.
 	Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error)
+	// ContainerStats returns one stats sample without waiting for a previous
+	// one (PreCPUStats is empty): the collector computes deltas between its own
+	// samples. Returns ErrNotFound (wrapped) if the container does not exist.
+	ContainerStats(ctx context.Context, id string) (container.StatsResponse, error)
 }
 
 // ErrNotFound reports a container that does not exist (anymore).
@@ -99,6 +105,23 @@ func (c *Client) Events(ctx context.Context, since time.Time) (<-chan events.Mes
 	}
 	res := c.cli.Events(ctx, opts)
 	return res.Messages, res.Err
+}
+
+func (c *Client) ContainerStats(ctx context.Context, id string) (container.StatsResponse, error) {
+	res, err := c.cli.ContainerStats(ctx, id, client.ContainerStatsOptions{Stream: false})
+	if cerrdefs.IsNotFound(err) {
+		return container.StatsResponse{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	if err != nil {
+		return container.StatsResponse{}, err
+	}
+	defer res.Body.Close()
+	var st container.StatsResponse
+	// One sample is a few KB; cap the read in case of a misbehaving endpoint.
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&st); err != nil {
+		return container.StatsResponse{}, fmt.Errorf("decodificar stats de %.12s: %w", id, err)
+	}
+	return st, nil
 }
 
 // FormatEventTime formats t as the "seconds.nanoseconds" form accepted by the

@@ -4,12 +4,12 @@
 
 ## Estado actual
 - **Etapa:** 3 — Colector de métricas
-- **Último paso completado:** Etapa 2 cerrada. Inventario en memoria alimentado por eventos y
-  reconciliación; la API (`/api/summary`, `/api/containers`) lee del inventario; el panel muestra
-  los estados conectando/desconectado/datos desactualizados y una lista básica de contenedores.
-- **Próximo paso:** Agregar `ContainerStats` a `docker.API` (y al fake), crear
-  `internal/collector` con un ticker único y cálculos puros (CPU ADR-002, memoria ADR-003, red,
-  block I/O) bien testeados. Revisar `container.StatsResponse` con `go doc` antes de diseñar.
+- **Último paso completado:** `docker.API.ContainerStats` (+ fake con StatsFunc/StatsDelay),
+  límites explícitos en el inventario (MemoryLimit, CPULimit) y `internal/collector` (cálculos puros
+  + bucle de rondas compartido) con tests en verde. Todavía no está conectado en main ni en la API.
+- **Próximo paso:** Conectar el colector en main (con el intervalo de la config), exponer las métricas en
+  `/api/containers` (objeto `metrics`), generar stats en el modo demo, mostrarlas en el panel,
+  registrar ADR-010 (decisiones de métricas) y verificar contra Docker real.
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)

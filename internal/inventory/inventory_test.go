@@ -350,6 +350,15 @@ func TestFromInspect(t *testing.T) {
 	if fromInspect(r).Health != HealthNone {
 		t.Error(`"none" de Docker debe mapearse a HealthNone`)
 	}
+	lim := fromInspect(dt.Container(idWeb, "web", t0, dt.MemoryLimit(64<<20), dt.NanoCPUs(500_000_000)))
+	if lim.MemoryLimit != 64<<20 || lim.CPULimit != 0.5 {
+		t.Errorf("límites: mem=%d cpu=%v", lim.MemoryLimit, lim.CPULimit)
+	}
+	q := dt.Container(idWeb, "web", t0)
+	q.HostConfig.CPUQuota = 150_000
+	if got := fromInspect(q).CPULimit; got != 1.5 {
+		t.Errorf("cpu por quota/period por defecto = %v, want 1.5", got)
+	}
 	if up := fromInspect(r).Uptime(t0.Add(time.Hour)); up != time.Hour {
 		t.Errorf("uptime = %s", up)
 	}

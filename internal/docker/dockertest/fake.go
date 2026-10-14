@@ -31,7 +31,14 @@ type Fake struct {
 	down bool
 	last int64 // last event TimeNano, keeps event times strictly increasing
 
-	Pings, Lists, Inspects, EventSubs atomic.Int64
+	// StatsFunc produces stats for running containers. Nil returns empty
+	// stats (Read set, everything else zero). Must be safe for concurrent use.
+	StatsFunc func(id string, now time.Time) container.StatsResponse
+	// StatsDelay is slept (outside the lock) before answering ContainerStats.
+	StatsDelay time.Duration
+
+	Pings, Lists, Inspects, EventSubs, Stats atomic.Int64
+	inFlight, MaxInFlight                    atomic.Int64
 }
 
 type sub struct {
@@ -96,6 +103,50 @@ func (f *Fake) InspectContainer(_ context.Context, id string) (container.Inspect
 		return container.InspectResponse{}, fmt.Errorf("%w: %s", docker.ErrNotFound, id)
 	}
 	return clone(c), nil
+}
+
+func (f *Fake) ContainerStats(ctx context.Context, id string) (container.StatsResponse, error) {
+	f.Stats.Add(1)
+	n := f.inFlight.Add(1)
+	defer f.inFlight.Add(-1)
+	for {
+		m := f.MaxInFlight.Load()
+		if n <= m || f.MaxInFlight.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	if f.StatsDelay > 0 {
+		select {
+		case <-time.After(f.StatsDelay):
+		case <-ctx.Done():
+			return container.StatsResponse{}, ctx.Err()
+		}
+	}
+	f.mu.Lock()
+	c, ok := f.ctrs[id]
+	down, fn := f.down, f.StatsFunc
+	running := ok && c.State.Running
+	f.mu.Unlock()
+	if down {
+		return container.StatsResponse{}, ErrDown
+	}
+	if !ok {
+		return container.StatsResponse{}, fmt.Errorf("%w: %s", docker.ErrNotFound, id)
+	}
+	if !running {
+		// Docker answers stopped containers with zeroed stats, Read included.
+		return container.StatsResponse{ID: id, Name: c.Name, OSType: "linux"}, nil
+	}
+	now := time.Now().UTC()
+	if fn == nil {
+		return container.StatsResponse{ID: id, Name: c.Name, OSType: "linux", Read: now}, nil
+	}
+	st := fn(id, now)
+	st.ID, st.Name, st.OSType = id, c.Name, "linux"
+	if st.Read.IsZero() {
+		st.Read = now
+	}
+	return st, nil
 }
 
 func (f *Fake) Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error) {
@@ -337,6 +388,16 @@ func Compose(project, service string) Option {
 		c.Config.Labels["com.docker.compose.project"] = project
 		c.Config.Labels["com.docker.compose.service"] = service
 	}
+}
+
+// MemoryLimit sets an explicit memory limit (docker run --memory).
+func MemoryLimit(bytes int64) Option {
+	return func(c *container.InspectResponse) { c.HostConfig.Memory = bytes }
+}
+
+// NanoCPUs sets a CPU limit (docker run --cpus=N → N×1e9).
+func NanoCPUs(n int64) Option {
+	return func(c *container.InspectResponse) { c.HostConfig.NanoCPUs = n }
 }
 
 // Restart sets the restart policy.
