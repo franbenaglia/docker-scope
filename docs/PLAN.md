@@ -112,12 +112,14 @@ _Cerrada: 17 tests del motor + store + API; verificado contra Docker real (unhea
 _Cerrada: verificado contra Docker real (json-file con stdout/stderr y ANSI/OSC, TTY, driver none, follow y fin al detener) con binario -race._
 
 ## Etapa 8 — Panel: resumen, tabla, detalle
-- [ ] Tema oscuro, layout responsive
-- [ ] Resumen (activos/detenidos/unhealthy/incidentes abiertos/daemon)
-- [ ] Tabla: búsqueda, filtros, ordenamiento, agrupación Compose
-- [ ] Detalle: metadatos + gráficos CPU/mem/red/disco (Chart.js, sin CDN)
-- [ ] Cliente SSE con reconexión y re-snapshot
-- [ ] Estados de carga/error/vacío/reconexión/datos antiguos
+- [x] Tema oscuro, layout responsive
+- [x] Resumen (activos/detenidos/unhealthy/incidentes abiertos/daemon)
+- [x] Tabla: búsqueda, filtros, ordenamiento, agrupación Compose
+- [x] Detalle: metadatos + gráficos CPU/mem/red/disco (Chart.js, sin CDN)
+- [x] Cliente SSE con reconexión y re-snapshot
+- [x] Estados de carga/error/vacío/reconexión/datos antiguos
+
+_Cerrada: verificado en modo demo (escritorio y 390 px de ancho, sin scroll horizontal de página)._
 
 ## Etapa 9 — Panel: logs, incidentes, reglas, mantenimiento
 - [ ] Visor de logs: pausar, limpiar, buscar, autoscroll, stdout/stderr

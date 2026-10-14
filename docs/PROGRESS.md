@@ -3,14 +3,15 @@
 > Actualizar este archivo **antes de cada commit**. Es lo primero que lee una sesión nueva.
 
 ## Estado actual
-- **Etapa:** 8 — Panel: resumen, tabla, detalle
-- **Último paso completado:** Etapa 7 cerrada. `internal/logs` (parser de frames y TTY, sanitizado,
-  buffer acotado), `GET /api/containers/{id}/logs` y `/logs/stream` (SSE separado, máx. 8),
-  `sse.Stream` reutilizable y logs sintéticos en el modo demo.
-- **Próximo paso:** Etapa 8: estructurar el panel (componentes y una navegación simple por hash, sin
-  SvelteKit), una tabla con búsqueda, filtros, orden y agrupación por Compose, y la vista de detalle con
-  metadatos y gráficos de CPU/mem/red/disco con Chart.js (instalar 4.5.1 exacto, ADR-006) desde
-  `/series`. Revisar la API de Chart.js 4 (tree-shaking: registrar los componentes) antes de usarla.
+- **Etapa:** 9 — Panel: logs, incidentes, reglas, mantenimiento
+- **Último paso completado:** Etapa 8 cerrada. Panel en componentes (`web/src/components`), router por
+  hash (`#/`, `#/c/<id>`), tabla con búsqueda, filtros (estado, salud, proyecto), orden y agrupación por
+  Compose (preferencias en localStorage), detalle con metadatos, valores actuales y 4 gráficos (Chart.js
+  4.5.1, eje X fijado al rango pedido, huecos sin datos) con rangos de 15m a 7d.
+- **Próximo paso:** Etapa 9: visor de logs en el detalle (EventSource a `/logs/stream`: pausa, limpiar,
+  búsqueda en el buffer, autoscroll, stdout/stderr, buffer acotado en el cliente, cambio de contenedor =
+  cerrar el stream), vistas `#/incidents` (historial, ack), `#/rules` (CRUD) y `#/maintenance`, y
+  notificaciones del navegador opt-in (sólo los incidentes no suprimidos).
 - **Bloqueos:** ninguno.
 
 ## Entorno verificado (2026-10-14)
@@ -35,6 +36,7 @@ _(no ampliar el alcance de SPEC.md; anotar aquí)_
 | Fecha | Etapa | Resumen |
 |-------|-------|---------|
 | 2026-10-14 | 0 | Harness inicial: CLAUDE.md, PLAN, PROGRESS, DECISIONS, ARCHITECTURE. |
+| 2026-10-14 | 8 | Panel: componentes, router por hash, tabla (filtros, orden, agrupación Compose), detalle con gráficos Chart.js (eje X fijado al rango), reloj compartido, estilos globales. Verificado en demo, escritorio y móvil. |
 | 2026-10-14 | 7 | Logs: parser (frames/TTY/timestamps), sanitizado, buffer acotado, REST tail + SSE follow con límite de streams, demo. Bug corregido: el truncado contaba dos veces. Verificado contra Docker real. |
 | 2026-10-14 | 6 | Motor de alertas (tick 1s, pendiente en memoria, abierta/resuelta persistidas, histéresis, cooldown, recover_for, mantenimiento con supresión, causas probables por códigos y eventos), API y SSE. Verificado contra Docker real con contenedores dsp-*. Corregido: dur() y los contenedores eliminados entre ticks (tracks inactivos). |
 | 2026-10-14 | 5 | Seguridad HTTP (Host/Origin/CSP), detalle/filtros/paginación, hub SSE + /api/stream, panel en vivo. Desvío: el commit b5b413a salió sin PROGRESS ni el middleware conectado (corregido en 271c32f). Corregida una carrera: los listeners se registraban después de arrancar las goroutines. |

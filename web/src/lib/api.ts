@@ -124,6 +124,45 @@ export interface ContainerList extends DataState {
   items: Container[];
 }
 
+export interface ContainerDetail extends Container, DataState {
+  image_id: string;
+  labels: Record<string, string>;
+  restart_max_retry: number;
+  log_driver: string;
+  tty: boolean;
+  health_failing_streak: number;
+  error?: string;
+}
+
+/** Punto de una serie reducida; null = sin datos en el intervalo. */
+export interface SeriesPoint {
+  t: string;
+  n: number;
+  cpu_avg: number | null;
+  cpu_max: number | null;
+  mem_avg: number | null;
+  mem_max: number | null;
+  mem_limit: number | null;
+  mem_pct_avg: number | null;
+  mem_pct_max: number | null;
+  net_rx_bps: number | null;
+  net_tx_bps: number | null;
+  blk_read_bps: number | null;
+  blk_write_bps: number | null;
+  pids_max: number | null;
+}
+
+export interface Series {
+  container_id: string;
+  from: string;
+  to: string;
+  bucket_seconds: number;
+  step_seconds: number;
+  /** raw = muestras originales agrupadas; 1m = resúmenes por minuto. */
+  source: 'raw' | '1m';
+  points: SeriesPoint[];
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
@@ -158,4 +197,11 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
 export const api = {
   summary: (signal?: AbortSignal) => getJSON<Summary>('/api/summary', signal),
   containers: (signal?: AbortSignal) => getJSON<ContainerList>('/api/containers', signal),
+  container: (id: string, signal?: AbortSignal) =>
+    getJSON<ContainerDetail>(`/api/containers/${encodeURIComponent(id)}`, signal),
+  series: (id: string, range: string, points: number, signal?: AbortSignal) =>
+    getJSON<Series>(
+      `/api/containers/${encodeURIComponent(id)}/series?range=${encodeURIComponent(range)}&points=${points}`,
+      signal,
+    ),
 };

@@ -18,6 +18,8 @@ internal/api/           handlers REST, DTOs, validación, middleware de segurida
 internal/sse/           hub SSE con colas acotadas
 internal/demo/          fuente de datos simulada
 web/                    Svelte + TS + Vite (build → web/dist, embebido)
+  src/lib/              api.ts (tipos y cliente), live.svelte.ts (SSE), router.svelte.ts, clock.svelte.ts, format.ts
+  src/components/       StatusBanners, SummaryCards, ContainerTable, ContainerDetail, MetricChart
 deploy/                 systemd, compose de prueba, config de ejemplo
 ```
 

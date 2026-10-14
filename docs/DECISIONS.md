@@ -207,3 +207,20 @@ retención, consultas acotadas y reducir puntos en los gráficos largos.
 - Driver sin lectura (Docker devuelve NotImplemented) → 409 `logs_unavailable`, con un mensaje que nombra
   el driver y las alternativas (json-file, local, journald, dual logging).
 - Nunca se guardan logs en SQLite ni en disco.
+
+## ADR-015 — Estructura del panel
+**Estado:** Aceptada (2026-10-14)
+**Decisión:**
+- SPA en Svelte 5 sin SvelteKit: router mínimo por hash (`lib/router.svelte.ts`), estado en vivo en
+  `lib/live.svelte.ts`, reloj compartido (`lib/clock.svelte.ts`) para los tiempos relativos y
+  componentes en `src/components`. Las utilidades visuales compartidas viven en `app.css`.
+- La tabla filtra y ordena en el cliente sobre el estado en vivo (la API admite los mismos filtros
+  para otros consumidores). Los valores ausentes van siempre al final; preferencias en localStorage
+  (con try/catch: sin almacenamiento no se recuerdan). La agrupación por Compose muestra por grupo los
+  contenedores en ejecución y sumas con unidad explícita (núcleos, bytes).
+- Gráficos con Chart.js 4.5.1 tree-shaken (Line, Point, LinearScale, Tooltip, Legend, Filler), eje X
+  lineal en ms sin adaptador de fechas y fijado al rango pedido (`from`–`to`), para que la falta de datos se
+  vea. `spanGaps: false`: los nulls son huecos. CPU y memoria muestran promedio y máximo del intervalo; la
+  memoria agrega una línea punteada de límite sólo si hay límite explícito. Las series se recargan
+  periódicamente (de 10 s a 5 min según el rango).
+- Bundle ~245 KB (86 KB gzip), servido embebido; sin CDN.

@@ -4,6 +4,11 @@ export function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString();
 }
 
+/** Fecha y hora local; las fechas llegan en UTC. */
+export function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
+
 /** Duración compacta: 45s, 12m, 3h 5m, 2d 4h. */
 export function fmtDuration(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));

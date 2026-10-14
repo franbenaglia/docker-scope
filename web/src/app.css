@@ -9,6 +9,10 @@
   --warn: #d29922;
   --bad: #f85149;
   --info: #58a6ff;
+  --chart-1: #58a6ff;
+  --chart-2: #d29922;
+  --chart-3: #3fb950;
+  --chart-4: #bc8cff;
   --radius: 8px;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -36,4 +40,96 @@ a {
 code,
 pre {
   font-family: var(--mono);
+}
+
+/* Utilidades compartidas por los componentes. */
+.banner {
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  border: 1px solid;
+}
+.banner.bad {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.banner.warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.banner.info {
+  border-color: var(--info);
+  color: var(--info);
+}
+.stale {
+  opacity: 0.55;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.8rem;
+}
+.ok {
+  color: var(--ok);
+}
+.warn {
+  color: var(--warn);
+}
+.bad {
+  color: var(--bad);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.state.running,
+.health.healthy {
+  color: var(--ok);
+}
+.state.exited,
+.state.dead,
+.health.unhealthy {
+  color: var(--bad);
+}
+.state.paused,
+.state.restarting,
+.health.starting {
+  color: var(--warn);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--muted);
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
+}
+button.link {
+  background: none;
+  border: none;
+  color: var(--info);
+  padding: 0;
+  text-decoration: underline;
 }
