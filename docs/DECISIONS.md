@@ -282,3 +282,15 @@ usuario o confiables) y queda como mejora posible (socket unix con permisos o to
   para no arrancar Docker por cuenta del monitor.
 - No se publica una imagen de contenedor: correr el monitor dentro de Docker exige montar el socket y
   `:ro` no lo protege (README).
+
+## ADR-019 — Eventos crudos para las causas y notificación por intento de conexión
+**Estado:** Aceptada (2026-10-14). Precisa ADR-013 (fuente de los eventos) y el contrato de `OnConnection`.
+**Contexto:** En la verificación final, un incidente por un bucle de reinicios mostraba "eventos: die →
+start" aunque el contenedor había terminado detenido. El motor recibía eventos sólo a través de los cambios
+del inventario, y un `die` seguido de inmediato por un reinicio no siempre cambia el estado inspeccionado.
+Además, el panel mostraba "reintentando (1)" cuando el agente ya iba por el 5.º intento.
+**Decisión:**
+- `inventory.OnEvent(func(events.Message))` entrega cada evento de contenedor (deduplicado, sin exec_* ni
+  otras acciones irrelevantes) aunque no cambie el estado. `alerts.Engine.Observe` lo consume.
+- `inventory.OnConnection` se notifica también en cada intento fallido (Attempts crece), y el panel
+  recibe el evento `daemon` con el contador actualizado.

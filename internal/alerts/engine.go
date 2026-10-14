@@ -169,19 +169,21 @@ func (e *Engine) Load(ctx context.Context) error {
 }
 
 // Observe records recent Docker events of a container (and the exit code of
-// "die" events), used to describe probable causes. Register with inventory.OnChange.
-func (e *Engine) Observe(ch inventory.Change) {
-	if ch.Event == nil {
+// "die" events), used to describe probable causes. Register with
+// inventory.OnEvent: it sees every event, including restarts too fast to
+// change the inventory state.
+func (e *Engine) Observe(m events.Message) {
+	if m.Actor.ID == "" {
 		return
 	}
-	at := time.Unix(0, ch.Event.TimeNano).UTC()
-	action := string(ch.Event.Action)
+	at := time.Unix(0, m.TimeNano).UTC()
+	action := string(m.Action)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	re := e.events[ch.ID]
+	re := e.events[m.Actor.ID]
 	if re == nil || at.Sub(re.at) > time.Minute {
 		re = &recentEvents{} // a new sequence: older events are not related
-		e.events[ch.ID] = re
+		e.events[m.Actor.ID] = re
 	}
 	re.at = at
 	if n := len(re.actions); n == 0 || re.actions[n-1] != action {
@@ -190,8 +192,8 @@ func (e *Engine) Observe(ch inventory.Change) {
 			re.actions = re.actions[1:]
 		}
 	}
-	if ch.Event.Action == events.ActionDie {
-		if code, err := strconv.Atoi(ch.Event.Actor.Attributes["exitCode"]); err == nil {
+	if m.Action == events.ActionDie {
+		if code, err := strconv.Atoi(m.Actor.Attributes["exitCode"]); err == nil {
 			re.exitCode = &code
 		}
 	}

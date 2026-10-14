@@ -87,7 +87,7 @@ func run() error {
 	if err := engine.Load(ctx); err != nil {
 		return err
 	}
-	inv.OnChange(engine.Observe)
+	inv.OnEvent(engine.Observe)
 	if dem != nil {
 		demo.EnsureRules(ctx, engine, log)
 	}

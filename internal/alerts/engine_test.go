@@ -382,8 +382,8 @@ func TestRestartsInWindow(t *testing.T) {
 	if len(x.open()) != 0 {
 		t.Fatal("2 reinicios no alcanzan el umbral de 3")
 	}
-	x.eng.Observe(inventory.Change{ID: "w1", Event: &events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano(),
-		Actor: events.Actor{Attributes: map[string]string{"exitCode": "3"}}}})
+	x.eng.Observe(events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano(),
+		Actor: events.Actor{ID: "w1", Attributes: map[string]string{"exitCode": "3"}}})
 	restart(130)
 	open := x.open()
 	if len(open) != 1 || !strings.Contains(open[0].Summary, "3 veces en 5m") || !strings.Contains(open[0].Cause, "último código de salida 3") {
@@ -413,9 +413,9 @@ func TestNotRunning(t *testing.T) {
 	if len(x.open()) != 0 {
 		t.Fatal("los contenedores ya detenidos al arrancar no alertan")
 	}
-	x.eng.Observe(inventory.Change{ID: "a1", Event: &events.Message{Action: events.ActionKill, TimeNano: t0.UnixNano()}})
-	x.eng.Observe(inventory.Change{ID: "a1", Event: &events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano() + 1,
-		Actor: events.Actor{Attributes: map[string]string{"exitCode": "137"}}}})
+	x.eng.Observe(events.Message{Action: events.ActionKill, TimeNano: t0.UnixNano(), Actor: events.Actor{ID: "a1"}})
+	x.eng.Observe(events.Message{Action: events.ActionDie, TimeNano: t0.UnixNano() + 1,
+		Actor: events.Actor{ID: "a1", Attributes: map[string]string{"exitCode": "137"}}})
 	x.set(exited(api, 137), old, other)
 	x.at(61)
 	x.at(66)
@@ -670,5 +670,17 @@ func TestFormatting(t *testing.T) {
 	}
 	if !strings.Contains(exitMeaning(137, true), "OOM") {
 		t.Error("OOMKilled")
+	}
+}
+
+func TestObserveKeepsRestartLoopSequence(t *testing.T) {
+	x := newH(t)
+	for i, a := range []events.Action{events.ActionDie, events.ActionStart, events.ActionDie, events.ActionStart, events.ActionDie} {
+		x.eng.Observe(events.Message{Action: a, TimeNano: t0.UnixNano() + int64(i),
+			Actor: events.Actor{ID: "f1", Attributes: map[string]string{"exitCode": "3"}}})
+	}
+	re := x.eng.events["f1"]
+	if got := strings.Join(re.actions, " → "); got != "start → die → start → die" || *re.exitCode != 3 {
+		t.Errorf("secuencia = %q (exit %v)", got, re.exitCode)
 	}
 }

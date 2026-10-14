@@ -1,7 +1,7 @@
 # Arquitectura
 
 > Mantener actualizado al crear/cambiar paquetes, interfaces, endpoints o eventos SSE.
-> Estado: etapas 1–7 implementadas (config, docker, dockertest, inventory, collector, store, sse, alerts, logs, demo, api, web).
+> Estado: plan completo (etapas 0–12). Etapas 1–7 implementadas (config, docker, dockertest, inventory, collector, store, sse, alerts, logs, demo, api, web).
 
 ## Estructura de directorios (prevista)
 ```
@@ -53,7 +53,8 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
     con jitter de 0,5 s a 30 s.
   - Eventos: dedup por (id, acción, timeNano) sobre los últimos 4096; cada evento relevante → inspect
     (idempotente). `destroy`/not found → Removed.
-  - Listeners `OnChange(Change)` / `OnConnection(ConnState)`: se ejecutan en la goroutine de Run y no deben bloquear.
+  - Listeners `OnChange(Change)`, `OnEvent(events.Message)` (cada evento, aunque no cambie el estado) y
+    `OnConnection(ConnState)` (cambios y cada intento fallido): se ejecutan en la goroutine de Run y no deben bloquear.
     `Change.Initial` = primera sincronización (estado preexistente, no transición); `Change.Event`
     es nil si el cambio se detectó por reconciliación.
 - `collector.Collector` ([internal/collector](../internal/collector/collector.go)): `Run` hace una
@@ -64,7 +65,7 @@ Navegador ──► api (REST: snapshot/series/config) ; /api/stream (general) ;
   `store.Writer`: un único goroutine de escritura, `EnqueueSamples(Round)` (vía `collector.OnRound`) y
   `EnqueueContainers` (vía `inventory.OnChange`); rollup cada minuto y prune cada hora. Ver ADR-011.
 - `alerts.Engine` ([internal/alerts](../internal/alerts/engine.go)): `Load` (reglas, mantenimiento, abiertos),
-  `Observe` (vía `inventory.OnChange`: eventos recientes y exitCode), `Run`/`Tick(now)`, `OnEvent(Event{opened|resolved|acked})`,
+  `Observe` (vía `inventory.OnEvent`: eventos recientes y exitCode, ADR-019), `Run`/`Tick(now)`, `OnEvent(Event{opened|resolved|acked})`,
   CRUD de reglas, `Ack`, `AddMaintenance`/`EndMaintenance`, `Pending`, `Status`. Persistencia: interfaz
   `alerts.Store`, implementada por `store.Store` ([internal/store/alerts.go](../internal/store/alerts.go)). Ver ADR-013.
 - Config ([internal/config](../internal/config/config.go)): valores por defecto < JSON (`--config`) < flags.

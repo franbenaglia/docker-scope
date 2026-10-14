@@ -126,6 +126,7 @@ type Inventory struct {
 	// Owned by the Run goroutine.
 	onChange  []func(Change)
 	onConn    []func(ConnState)
+	onEvent   []func(events.Message)
 	seen      *dedup
 	lastEvent time.Time
 }
@@ -146,7 +147,13 @@ func New(api docker.API, opts Options) *Inventory {
 // Run. Listeners run on the Run goroutine and must not block.
 func (i *Inventory) OnChange(fn func(Change)) { i.onChange = append(i.onChange, fn) }
 
-// OnConnection registers a listener for connection state changes. Same rules as OnChange.
+// OnEvent registers a listener for every container event (deduplicated,
+// without exec_* and other noise), even when it does not change the tracked
+// state — e.g. a "die" immediately followed by a policy restart. Same rules as OnChange.
+func (i *Inventory) OnEvent(fn func(events.Message)) { i.onEvent = append(i.onEvent, fn) }
+
+// OnConnection registers a listener for connection state changes and for each
+// failed reconnection attempt (Attempts grows). Same rules as OnChange.
 func (i *Inventory) OnConnection(fn func(ConnState)) { i.onConn = append(i.onConn, fn) }
 
 // Snapshot returns a copy of the current state.
@@ -284,6 +291,9 @@ func (i *Inventory) handleEvent(ctx context.Context, m events.Message) error {
 	}
 	if ignoredActions[m.Action] || strings.HasPrefix(string(m.Action), "exec_") {
 		return nil
+	}
+	for _, fn := range i.onEvent {
+		fn(m)
 	}
 	id := m.Actor.ID
 	if m.Action == events.ActionDestroy {
@@ -433,9 +443,7 @@ func (i *Inventory) setDisconnected(err error) {
 	}
 	i.conn = st
 	i.mu.Unlock()
-	if prev.Status != ConnDisconnected {
-		i.notifyConn(st)
-	}
+	i.notifyConn(st) // also on each retry: listeners see the attempt count
 }
 
 func (i *Inventory) notifyConn(st ConnState) {

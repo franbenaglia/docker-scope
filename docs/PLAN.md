@@ -148,8 +148,13 @@ _Cerrada: escenario verificado en tiempo real (abren y se resuelven los 4 tipos 
 _Cerrada: Compose y scenario.sh verificados contra Docker real; unidad validada con `systemd-analyze verify` (no instalada: requiere root)._
 
 ## Etapa 12 — Verificación final
-- [ ] `make check` limpio
-- [ ] Recorrido E2E: panel → contenedor → métricas → logs → fallo controlado → incidente →
+- [x] `make check` limpio
+- [x] Recorrido E2E: panel → contenedor → métricas → logs → fallo controlado → incidente →
       recuperación
-- [ ] Test de desconexión/reconexión Docker y cancelación de streams
-- [ ] Resumen final (implementado, comandos, verificaciones, pendientes reales) en PROGRESS.md
+- [x] Test de desconexión/reconexión Docker y cancelación de streams
+- [x] Resumen final (implementado, comandos, verificaciones, pendientes reales) en PROGRESS.md
+
+_Cerrada (2026-10-14): `make check` y `go test -race -count=1 ./...` limpios; recorrido E2E en el navegador con
+el Compose de prueba contra Docker real (binario -race); desconexión/reconexión vía proxy socat; cancelación del
+stream de logs medida por las conexiones al proxy. Dos correcciones: los eventos para la causa se toman de
+`inventory.OnEvent` y la conexión se notifica en cada intento (ADR-019)._

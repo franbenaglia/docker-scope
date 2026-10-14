@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -23,7 +24,24 @@ const (
 
 var t0 = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
+// newHarnessWithEvents is start plus an OnEvent listener (registered before Run).
+func newHarnessWithEvents(t *testing.T, fake *dt.Fake) *harness {
+	t.Helper()
+	h := &harness{t: t, fake: fake, done: make(chan struct{})}
+	h.inv = New(fake, Options{
+		ResyncInterval: time.Hour, MinBackoff: time.Millisecond, MaxBackoff: 5 * time.Millisecond,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	h.inv.OnEvent(func(m events.Message) { h.mu.Lock(); h.events = append(h.events, m.Action); h.mu.Unlock() })
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel = cancel
+	go func() { _ = h.inv.Run(ctx); close(h.done) }()
+	t.Cleanup(h.stop)
+	return h
+}
+
 type harness struct {
+	events []events.Action
 	t      *testing.T
 	fake   *dt.Fake
 	inv    *Inventory
@@ -374,5 +392,38 @@ func TestDedup(t *testing.T) {
 	}
 	if !d.add("a") { // evicted
 		t.Error(`"a" debería haber sido desalojado`)
+	}
+}
+
+func TestOnEventSeesEventsWithoutStateChanges(t *testing.T) {
+	fake := dt.New(dt.Container(idWeb, "web", t0, dt.Restart(container.RestartPolicyAlways)))
+	h := newHarnessWithEvents(t, fake)
+	h.waitConnected()
+	fake.AutoRestart(idWeb, 3, t0.Add(time.Minute)) // die + start
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		h.mu.Lock()
+		got := slices.Clone(h.events)
+		h.mu.Unlock()
+		if slices.Equal(got, []events.Action{events.ActionDie, events.ActionStart}) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("eventos = %v", got)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestConnectionListenerSeesEachAttempt(t *testing.T) {
+	fake := dt.New()
+	fake.SetDown(true)
+	h := start(t, fake)
+	h.waitFor("3 intentos", func(s Snapshot) bool { return s.Conn.Attempts >= 3 })
+	h.mu.Lock()
+	n := len(h.conns)
+	h.mu.Unlock()
+	if n < 3 {
+		t.Errorf("notificaciones de conexión = %d, want ≥ 3 (una por intento)", n)
 	}
 }
